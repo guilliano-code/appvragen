@@ -80,14 +80,66 @@
     margin-bottom: 20px;
   }
 
-  header.app-header h1 {
-    font-size: 26px;
-    margin: 0 0 4px;
-    font-weight: 800;
-    letter-spacing: -0.02em;
+  .app-logo {
+    height: 40px;
+    width: auto;
+    margin: 0 0 8px;
   }
 
-  header.app-header h1 .accent-dot { color: var(--accent); }
+  /* ---------- Swipe captcha ---------- */
+  .swipe-track {
+    position: relative;
+    width: 100%;
+    height: 56px;
+    border-radius: 28px;
+    background: var(--card-bg-alt);
+    border: 1px solid var(--border-subtle);
+    overflow: hidden;
+    margin-top: 22px;
+    touch-action: none;
+  }
+  .swipe-fill {
+    position: absolute;
+    top: 0; left: 0; bottom: 0;
+    width: 56px;
+    background: rgba(218, 252, 90, 0.22);
+    pointer-events: none;
+  }
+  #captcha-overlay.captcha-success .swipe-fill { background: rgba(74, 222, 128, 0.28); }
+  .swipe-label {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--muted);
+    pointer-events: none;
+    transition: opacity 0.15s ease;
+  }
+  .swipe-handle {
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    width: 48px;
+    height: 48px;
+    min-width: 48px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--accent-ink);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+    font-weight: 800;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+    z-index: 2;
+  }
+  .swipe-handle:active { cursor: grabbing; }
+  #captcha-overlay.captcha-success .swipe-handle { background: var(--green); color: #08140C; }
 
   header.app-header p {
     margin: 0;
@@ -458,9 +510,24 @@
 </head>
 <body>
 
+<!-- Swipe-captcha: eenmalige menselijke check bij eerste bezoek. Puur
+     client-side (geen server om tegen te controleren) — bedoeld als
+     drempel tegen simpele/casual bots, geen harde beveiliging. -->
+<div class="overlay" id="captcha-overlay">
+  <div class="sheet" role="dialog" aria-modal="true">
+    <h2>Welkom 👋</h2>
+    <p class="subtle">Sleep de knop helemaal naar rechts om te bevestigen dat je geen bot bent.</p>
+    <div class="swipe-track" id="swipe-track">
+      <div class="swipe-fill" id="swipe-fill"></div>
+      <span class="swipe-label" id="swipe-label">Sleep om te bevestigen →</span>
+      <div class="swipe-handle" id="swipe-handle" role="slider" aria-label="Sleep om te bevestigen" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" tabindex="0">➡️</div>
+    </div>
+  </div>
+</div>
+
 <div class="container">
   <header class="app-header">
-    <h1>🎡 Umob Draairad</h1>
+    <img src="UMOB_LOGO_RGB_YELLOW.png" alt="Umob" class="app-logo">
     <p>Genereer viral quiz-vragen voor content</p>
   </header>
 
@@ -524,6 +591,101 @@
 (function () {
   "use strict";
 
+  /* ==================== SWIPE CAPTCHA ====================
+     Eenmalige menselijke check bij eerste bezoek per browser/toestel.
+     Puur client-side: geen server om tegen te verifiëren, dus dit is een
+     drempel tegen simpele/casual bots — geen harde beveiliging. */
+  (function initCaptcha() {
+    const CAPTCHA_KEY = "umob_captcha_verified";
+    if (localStorage.getItem(CAPTCHA_KEY) === "true") return;
+
+    const overlay = document.getElementById("captcha-overlay");
+    const track = document.getElementById("swipe-track");
+    const handle = document.getElementById("swipe-handle");
+    const fill = document.getElementById("swipe-fill");
+    const label = document.getElementById("swipe-label");
+    overlay.classList.add("open");
+    document.body.style.overflow = "hidden";
+
+    let dragging = false;
+    let maxX = 0;
+
+    function updateDims() {
+      maxX = track.clientWidth - handle.offsetWidth - 8;
+    }
+
+    function setPosition(x) {
+      x = Math.max(0, Math.min(maxX, x));
+      handle.style.transform = "translateX(" + x + "px)";
+      fill.style.width = (x + handle.offsetWidth) + "px";
+      const pct = maxX > 0 ? x / maxX : 0;
+      label.style.opacity = String(1 - pct);
+      handle.setAttribute("aria-valuenow", String(Math.round(pct * 100)));
+      return pct;
+    }
+
+    function complete() {
+      localStorage.setItem(CAPTCHA_KEY, "true");
+      overlay.classList.add("captcha-success");
+      setTimeout(function () {
+        overlay.classList.remove("open");
+        document.body.style.overflow = "";
+      }, 350);
+    }
+
+    function onPointerDown(e) {
+      dragging = true;
+      updateDims();
+      if (handle.setPointerCapture && e.pointerId != null) {
+        handle.setPointerCapture(e.pointerId);
+      }
+    }
+    function onPointerMove(e) {
+      if (!dragging) return;
+      const rect = track.getBoundingClientRect();
+      const x = e.clientX - rect.left - handle.offsetWidth / 2;
+      const pct = setPosition(x);
+      if (pct >= 0.92) {
+        dragging = false;
+        setPosition(maxX);
+        complete();
+      }
+    }
+    function onPointerUp() {
+      if (!dragging) return;
+      dragging = false;
+      setPosition(0);
+    }
+
+    handle.addEventListener("pointerdown", onPointerDown);
+    handle.addEventListener("pointermove", onPointerMove);
+    handle.addEventListener("pointerup", onPointerUp);
+    handle.addEventListener("pointercancel", onPointerUp);
+
+    // Toetsenbord-alternatief (pijltjestoetsen) voor toegankelijkheid.
+    handle.addEventListener("keydown", function (e) {
+      updateDims();
+      let step = 24;
+      if (e.key === "ArrowRight" || e.key === "ArrowUp") {
+        const current = maxX * (parseInt(handle.getAttribute("aria-valuenow"), 10) / 100);
+        const pct = setPosition(current + step);
+        if (pct >= 0.92) { setPosition(maxX); complete(); }
+        e.preventDefault();
+      } else if (e.key === "ArrowLeft" || e.key === "ArrowDown") {
+        const current = maxX * (parseInt(handle.getAttribute("aria-valuenow"), 10) / 100);
+        setPosition(current - step);
+        e.preventDefault();
+      } else if (e.key === "Enter" || e.key === " ") {
+        setPosition(maxX);
+        complete();
+        e.preventDefault();
+      }
+    });
+
+    window.addEventListener("resize", updateDims);
+    updateDims();
+  })();
+
   /* ==================== CONFIG ==================== */
   const CONFIG = {
     STORAGE_KEY_QUESTIONS: "umob_questions",
@@ -532,222 +694,220 @@
 
   /* ==================== CATEGORIES ==================== */
   const CATEGORIES = [
-    { id: "steden", emoji: "🏙️", label: "Steden & Landen" },
-    { id: "vervoer", emoji: "🛴", label: "Vervoer-type" },
+    { id: "steden", emoji: "🌍", label: "Steden" },
+    { id: "vervoer", emoji: "🛴", label: "Vervoer" },
     { id: "slim", emoji: "🧠", label: "Slimme reiziger" },
-    { id: "app", emoji: "📱", label: "Umob-app" },
-    { id: "weetjes", emoji: "💡", label: "Wist je dat" },
-    { id: "battle", emoji: "⚔️", label: "Battle" }
+    { id: "app", emoji: "📱", label: "De App" },
+    { id: "kosten", emoji: "💶", label: "Wat kost het?" }
   ];
 
   /* ==================== VASTE VRAGENBANK ====================
-     ~96 handmatig samengestelde vragen (16 per categorie, telkens 8 Umob +
-     8 Adjacent, verdeeld over makkelijk/middel/moeilijk). Geen API of
+     192 handmatig samengestelde vragen in eenvoudig, duidelijk Nederlands
+     (B2-niveau), verdeeld over 5 categorieën, telkens gemengd Umob-specifiek
+     en Adjacent, verdeeld over makkelijk/middel/moeilijk. Geen API of
      internetverbinding nodig — alles draait lokaal in de browser. */
   const QUESTION_BANK = {
     steden: [
-      { question: "In hoeveel landen kun je Umob gebruiken?", options: { A: "12+", B: "20+", C: "35+" }, correct: "B", fact: "Umob is actief in 20+ landen wereldwijd.", type: "umob", difficulty: "makkelijk" },
-      { question: "In hoeveel steden is Umob beschikbaar?", options: { A: "100+", B: "150+", C: "260+" }, correct: "C", fact: "Umob dekt 260+ steden — van grote metropolen tot kleinere hubs.", type: "umob", difficulty: "makkelijk" },
-      { question: "Hoeveel Umob-accounts heb je nodig om in 5 verschillende landen te reizen?", options: { A: "5", B: "1", C: "Per stad één" }, correct: "B", fact: "Eén account werkt overal waar Umob actief is.", type: "umob", difficulty: "makkelijk" },
-      { question: "Welke vervoersvorm zit NIET standaard in Umob?", options: { A: "Deelscooter", B: "Onderzeeër", C: "Deelauto" }, correct: "B", fact: "Best gek om te vragen, maar nee — nog geen onderzeeërs in de app.", type: "umob", difficulty: "middel" },
-      { question: "Wat kun je met Umob NIET rechtstreeks vergelijken voordat je boekt?", options: { A: "Prijs", B: "Reistijd", C: "Het weer" }, correct: "C", fact: "Umob laat je prijs én reistijd tussen aanbieders vergelijken — weersvoorspellingen niet.", type: "umob", difficulty: "middel" },
-      { question: "Hoeveel losse apps zou je normaal nodig hebben voor alle aanbieders die in Umob zitten?", options: { A: "2-3", B: "5-6", C: "15+" }, correct: "C", fact: "Umob bundelt tientallen aanbieders in één app.", type: "umob", difficulty: "middel" },
-      { question: "Wat gebeurt er met je betaling als je met Umob van scooter naar taxi wisselt binnen één rit?", options: { A: "Twee keer apart betalen", B: "Eén betaling in de app", C: "Alleen contant" }, correct: "B", fact: "Pay-in-the-app betekent: geen losse afrekenmomenten per aanbieder.", type: "umob", difficulty: "moeilijk" },
-      { question: "Welke van deze drie hoort NIET tussen Umob's aanbieders?", options: { A: "E-bike", B: "OV", C: "Ruimteraket" }, correct: "C", fact: "Nog geen ruimtereizen in Umob — misschien over een paar jaar.", type: "umob", difficulty: "moeilijk" },
-      { question: "Welke stad staat bekend als de fietshoofdstad van de wereld?", options: { A: "Amsterdam", B: "Berlijn", C: "Rome" }, correct: "A", fact: "In Amsterdam staan meer fietsen dan er inwoners zijn.", type: "adjacent", difficulty: "makkelijk" },
-      { question: "Welke metro was de allereerste ter wereld?", options: { A: "Londense Underground", B: "Parijse Métro", C: "New Yorkse Subway" }, correct: "A", fact: "De Underground opende al in 1863 — ruim 160 jaar geleden.", type: "adjacent", difficulty: "makkelijk" },
-      { question: "In welke Italiaanse stad rijden geen auto's, alleen boten?", options: { A: "Milaan", B: "Venetië", C: "Turijn" }, correct: "B", fact: "Venetië heeft simpelweg geen straten breed genoeg voor auto's.", type: "adjacent", difficulty: "middel" },
-      { question: "Welk land staat bekend om het hoogste percentage elektrische auto's op de weg?", options: { A: "Duitsland", B: "Noorwegen", C: "Spanje" }, correct: "B", fact: "In Noorwegen is het merendeel van de nieuwverkopen inmiddels elektrisch.", type: "adjacent", difficulty: "middel" },
-      { question: "Welk Aziatisch treinstation staat in het Guinness Book of Records als drukste ter wereld?", options: { A: "Tokyo Shinjuku", B: "Seoul Station", C: "Bangkok Hua Lamphong" }, correct: "A", fact: "Shinjuku Station verwerkt dagelijks miljoenen reizigers.", type: "adjacent", difficulty: "middel" },
-      { question: "In welke stad werd het allereerste verkeerslicht ter wereld geplaatst (1868)?", options: { A: "New York", B: "Londen", C: "Parijs" }, correct: "B", fact: "Dat eerste verkeerslicht ontplofte binnen een maand — gaslek.", type: "adjacent", difficulty: "moeilijk" },
-      { question: "Welke stad voerde als een van de eersten ter wereld een tolheffing in voor auto's in het centrum?", options: { A: "Londen", B: "Berlijn", C: "Madrid" }, correct: "A", fact: "De 'congestion charge' in Londen bestaat sinds 2003.", type: "adjacent", difficulty: "moeilijk" },
-      { question: "Welke Aziatische stad heeft zulke strenge regels voor autobezit dat een kenteken duurder kan zijn dan de auto zelf?", options: { A: "Singapore", B: "Tokio", C: "Seoul" }, correct: "A", fact: "In Singapore betaal je eerst voor een 'Certificate of Entitlement' vóór je een auto mag kopen.", type: "adjacent", difficulty: "moeilijk" },
-      { question: "In wat voor gebieden is Umob vooral actief?", options: { A: "Alleen kleine dorpen", B: "Grote en middelgrote steden", C: "Alleen op vliegvelden" }, correct: "B", fact: "Umob focust op stedelijke gebieden waar deelvervoer het handigst is.", type: "umob", difficulty: "makkelijk" },
-      { question: "Wat gebeurt er met jouw Umob-account als het aantal landen waarin Umob actief is groeit?", options: { A: "Je moet een nieuw account maken", B: "Niks, je account werkt straks ook in nieuwe landen", C: "Je moet opnieuw je gegevens invullen" }, correct: "B", fact: "Eén account blijft altijd werken, ook als Umob uitbreidt naar nieuwe landen.", type: "umob", difficulty: "makkelijk" },
-      { question: "Wat is het verschil tussen 'landen' en 'steden' in Umob's dekking?", options: { A: "Geen verschil", B: "Umob is actief in 20+ landen, verspreid over 260+ steden", C: "Umob telt alleen landen" }, correct: "B", fact: "20+ landen en 260+ steden zijn twee losse, groeiende cijfers.", type: "umob", difficulty: "makkelijk" },
-      { question: "Reis je van de ene naar de andere Umob-stad — wat verandert er aan je account?", options: { A: "Niets, je gebruikt dezelfde login", B: "Je moet opnieuw registreren", C: "Je account werkt daar niet" }, correct: "A", fact: "Eén Umob-login werkt overal waar de app actief is.", type: "umob", difficulty: "middel" },
-      { question: "Wat is een logisch gevolg van actief zijn in 260+ steden?", options: { A: "Minder keuze per stad", B: "Meer diverse aanbieders om uit te kiezen", C: "Hogere prijzen overal" }, correct: "B", fact: "Meer steden betekent meer aangesloten aanbieders om uit te kiezen.", type: "umob", difficulty: "middel" },
-      { question: "Wat hoef je bij aankomst in een nieuwe Umob-stad zeker niet te doen?", options: { A: "Een nieuwe, aparte app downloaden", B: "Reizen boeken", C: "Betalen voor je rit" }, correct: "A", fact: "Je gebruikt overal dezelfde Umob-app, nooit een aparte per stad.", type: "umob", difficulty: "middel" },
-      { question: "Welke combinatie vind je toch echt niet standaard terug binnen Umob?", options: { A: "Scooter + trein", B: "Fiets + taxi", C: "Zeppelin + onderzeeër" }, correct: "C", fact: "Zeppelins en onderzeeërs zitten (nog) niet in de app.", type: "umob", difficulty: "moeilijk" },
-      { question: "Wat groeit er structureel bij Umob?", options: { A: "Het aantal aangesloten steden en landen", B: "Het aantal wachtwoorden dat je nodig hebt", C: "De reistijd van elke rit" }, correct: "A", fact: "Umob's dekking blijft uitbreiden naar nieuwe steden en landen.", type: "umob", difficulty: "moeilijk" },
-      { question: "Welke Deense hoofdstad staat wereldwijd bekend als één van de meest fietsvriendelijke steden?", options: { A: "Kopenhagen", B: "Oslo", C: "Stockholm" }, correct: "A", fact: "Kopenhagen heeft zelfs speciale 'fietssnelwegen' tussen de voorsteden en het centrum.", type: "adjacent", difficulty: "makkelijk" },
-      { question: "In welk land woon je gemiddeld gezien met meer fietsen dan mensen, landelijk gezien (niet alleen in de hoofdstad)?", options: { A: "Duitsland", B: "Nederland", C: "België" }, correct: "B", fact: "Nederland telt landelijk meer fietsen dan inwoners.", type: "adjacent", difficulty: "makkelijk" },
-      { question: "Welk Aziatisch treinsysteem was het eerste hogesnelheidstreinnetwerk ter wereld (1964)?", options: { A: "De Chinese hogesnelheidslijn", B: "De Japanse Shinkansen", C: "De Koreaanse KTX" }, correct: "B", fact: "De Shinkansen ('bullet train') begon te rijden rond de Olympische Spelen van Tokio in 1964.", type: "adjacent", difficulty: "middel" },
-      { question: "Welke metro staat bekend als 's werelds langste volledig geautomatiseerde (rijdt zonder bestuurder) metronetwerk?", options: { A: "De Metro van Dubai", B: "De Metro van Singapore", C: "De Metro van Kopenhagen" }, correct: "A", fact: "De Dubai Metro staat in het Guinness Book of Records voor het langste automatische metronetwerk.", type: "adjacent", difficulty: "middel" },
-      { question: "In welke Braziliaanse stad ontstond in de jaren '70 het moderne concept van snelle bus-only rijstroken (BRT)?", options: { A: "Rio de Janeiro", B: "São Paulo", C: "Curitiba" }, correct: "C", fact: "Curitiba geldt wereldwijd als de pionier van Bus Rapid Transit.", type: "adjacent", difficulty: "middel" },
-      { question: "Waar komt het woord 'bus' oorspronkelijk vandaan?", options: { A: "Van het Latijnse 'omnibus' (voor iedereen)", B: "Van een Franse uitvindersnaam", C: "Van 'business'" }, correct: "A", fact: "'Bus' is simpelweg een afkorting van omnibus — Latijn voor 'voor allen'.", type: "adjacent", difficulty: "moeilijk" },
-      { question: "Welk Amerikaans bedrijf richtte in 2009 in San Francisco de eerste grote ride-hailing app op?", options: { A: "Lyft", B: "Uber", C: "Via" }, correct: "B", fact: "Uber begon in 2009 en veranderde binnen een paar jaar wereldwijd hoe mensen een taxi bestellen.", type: "adjacent", difficulty: "moeilijk" },
-      { question: "Welke Belgische stad voerde één van de grootste autovrije binnensteden van Europa in?", options: { A: "Brussel", B: "Antwerpen", C: "Gent" }, correct: "C", fact: "Gent heeft een van de grootste autovrije stadskernen van Europa.", type: "adjacent", difficulty: "moeilijk" }
+      { question: "In hoeveel landen kun je Umob gebruiken?", options: { A: "12+", B: "20+", C: "35+" }, correct: "B", fact: "Umob is actief in meer dan 20 landen.", type: "umob", difficulty: "makkelijk" },
+      { question: "In hoeveel steden kun je Umob gebruiken?", options: { A: "100+", B: "150+", C: "260+" }, correct: "C", fact: "Umob is actief in meer dan 260 steden.", type: "umob", difficulty: "makkelijk" },
+      { question: "Hoeveel accounts heb je nodig om in 5 landen met Umob te reizen?", options: { A: "5", B: "1", C: "Eén per stad" }, correct: "B", fact: "Je hebt maar één account nodig, in elk land.", type: "umob", difficulty: "makkelijk" },
+      { question: "Welk vervoer zit niet in Umob?", options: { A: "Deelscooter", B: "Onderzeeër", C: "Deelauto" }, correct: "B", fact: "Een onderzeeër zit er nog niet bij.", type: "umob", difficulty: "middel" },
+      { question: "Wat kun je in Umob niet vergelijken voor je boekt?", options: { A: "De prijs", B: "De reistijd", C: "Het weer" }, correct: "C", fact: "Je ziet wel prijs en reistijd, maar geen weerbericht.", type: "umob", difficulty: "middel" },
+      { question: "Hoeveel losse apps bespaar je door Umob te gebruiken?", options: { A: "2 tot 3", B: "5 tot 6", C: "Tientallen" }, correct: "C", fact: "In plaats van tientallen apps gebruik je er nu maar één.", type: "umob", difficulty: "middel" },
+      { question: "Wat gebeurt er als je in Umob wisselt van scooter naar taxi?", options: { A: "Je betaalt twee keer apart", B: "Je betaalt alles in één app", C: "Je moet contant betalen" }, correct: "B", fact: "Je betaalt alles gewoon in de app, ook als je van vervoer wisselt.", type: "umob", difficulty: "middel" },
+      { question: "Welk vervoer hoort niet bij Umob?", options: { A: "E-bike", B: "OV", C: "Ruimteraket" }, correct: "C", fact: "Een ruimteraket zit er nog niet bij.", type: "umob", difficulty: "middel" },
+      { question: "In wat voor gebieden is Umob vooral actief?", options: { A: "Alleen kleine dorpen", B: "Grote en middelgrote steden", C: "Alleen op vliegvelden" }, correct: "B", fact: "Umob richt zich vooral op steden.", type: "umob", difficulty: "makkelijk" },
+      { question: "Wat verandert er als Umob in een nieuw land start?", options: { A: "Je moet een nieuw account maken", B: "Je account werkt daar meteen ook", C: "Je moet opnieuw je gegevens invullen" }, correct: "B", fact: "Eén account blijft werken, ook in nieuwe landen.", type: "umob", difficulty: "makkelijk" },
+      { question: "Wat gebeurt er met je account als je naar een andere Umob-stad reist?", options: { A: "Niets, je gebruikt dezelfde login", B: "Je moet opnieuw registreren", C: "Het werkt daar niet" }, correct: "A", fact: "Je Umob-login werkt overal waar de app actief is.", type: "umob", difficulty: "middel" },
+      { question: "Wat betekent het als Umob in meer steden actief wordt?", options: { A: "Minder keuze per stad", B: "Meer aanbieders om uit te kiezen", C: "Hogere prijzen overal" }, correct: "B", fact: "Meer steden betekent ook meer aanbieders om uit te kiezen.", type: "umob", difficulty: "middel" },
+      { question: "Wat hoef je in een nieuwe Umob-stad zeker niet te doen?", options: { A: "Een nieuwe app downloaden", B: "Een rit boeken", C: "Betalen voor je rit" }, correct: "A", fact: "Je gebruikt overal dezelfde app, nooit een aparte per stad.", type: "umob", difficulty: "middel" },
+      { question: "Welke twee dingen horen echt niet bij Umob?", options: { A: "Scooter en trein", B: "Fiets en taxi", C: "Zeppelin en onderzeeër" }, correct: "C", fact: "Zeppelins en onderzeeërs zitten er nog niet bij.", type: "umob", difficulty: "moeilijk" },
+      { question: "Wat groeit er steeds bij Umob?", options: { A: "Het aantal steden en landen", B: "Het aantal wachtwoorden", C: "De reistijd van elke rit" }, correct: "A", fact: "Umob wordt steeds groter, met meer steden en landen.", type: "umob", difficulty: "moeilijk" },
+      { question: "Wat is het verschil tussen de landen en de steden van Umob?", options: { A: "Geen verschil", B: "Umob zit in 20+ landen, verspreid over 260+ steden", C: "Umob telt alleen landen" }, correct: "B", fact: "20+ landen en 260+ steden zijn twee verschillende getallen.", type: "umob", difficulty: "moeilijk" },
+      { question: "In welke stad staan meer fietsen dan mensen?", options: { A: "Amsterdam", B: "Berlijn", C: "Rome" }, correct: "A", fact: "In Amsterdam staan meer fietsen dan er inwoners zijn.", type: "adjacent", difficulty: "makkelijk" },
+      { question: "Welke metro was er het eerst?", options: { A: "De metro van Londen", B: "De metro van Parijs", C: "De metro van New York" }, correct: "A", fact: "De metro van Londen reed al in 1863.", type: "adjacent", difficulty: "makkelijk" },
+      { question: "In welke stad rijden geen auto's, alleen boten?", options: { A: "Milaan", B: "Venetië", C: "Turijn" }, correct: "B", fact: "In Venetië zijn de straten te smal voor auto's.", type: "adjacent", difficulty: "middel" },
+      { question: "Welk land heeft de meeste elektrische auto's op de weg?", options: { A: "Duitsland", B: "Noorwegen", C: "Spanje" }, correct: "B", fact: "In Noorwegen zijn de meeste nieuwe auto's elektrisch.", type: "adjacent", difficulty: "middel" },
+      { question: "Welk station is het drukste treinstation ter wereld?", options: { A: "Tokyo Shinjuku", B: "Seoul Station", C: "Bangkok Hua Lamphong" }, correct: "A", fact: "Shinjuku Station heeft dagelijks miljoenen reizigers.", type: "adjacent", difficulty: "middel" },
+      { question: "Waar stond het eerste verkeerslicht ter wereld?", options: { A: "New York", B: "Londen", C: "Parijs" }, correct: "B", fact: "Dat verkeerslicht uit 1868 ging binnen een maand kapot.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Welke stad had als een van de eersten tol voor auto's in het centrum?", options: { A: "Londen", B: "Berlijn", C: "Madrid" }, correct: "A", fact: "Londen heeft al sinds 2003 zo'n tol.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Waarom is een auto kopen in Singapore zo duur?", options: { A: "Je betaalt eerst voor een soort vergunning", B: "Benzine is er heel duur", C: "Auto's zijn er verboden" }, correct: "A", fact: "Eerst een vergunning kopen, dan pas de auto zelf betalen.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Welke Deense stad is heel fietsvriendelijk?", options: { A: "Kopenhagen", B: "Oslo", C: "Stockholm" }, correct: "A", fact: "Kopenhagen heeft zelfs speciale fietswegen naar het centrum.", type: "adjacent", difficulty: "makkelijk" },
+      { question: "In welk land staan landelijk meer fietsen dan mensen?", options: { A: "Duitsland", B: "Nederland", C: "België" }, correct: "B", fact: "In heel Nederland staan meer fietsen dan er mensen zijn.", type: "adjacent", difficulty: "makkelijk" },
+      { question: "Welke Japanse trein was de eerste hogesnelheidstrein ter wereld?", options: { A: "De Chinese hogesnelheidstrein", B: "De Japanse Shinkansen", C: "De Koreaanse KTX" }, correct: "B", fact: "De Shinkansen reed al vanaf 1964.", type: "adjacent", difficulty: "middel" },
+      { question: "Welke metro rijdt zonder bestuurder en is de langste ter wereld?", options: { A: "De metro van Dubai", B: "De metro van Singapore", C: "De metro van Kopenhagen" }, correct: "A", fact: "De metro van Dubai heeft een wereldrecord: langste metro zonder bestuurder.", type: "adjacent", difficulty: "middel" },
+      { question: "In welke Braziliaanse stad ontstond het idee van snelle busbanen?", options: { A: "Rio de Janeiro", B: "São Paulo", C: "Curitiba" }, correct: "C", fact: "Curitiba geldt als de bedenker van dit soort snel bussysteem.", type: "adjacent", difficulty: "middel" },
+      { question: "Waar komt het woord 'bus' vandaan?", options: { A: "Van het Latijnse woord voor 'voor iedereen'", B: "Van een Franse uitvinder", C: "Van het woord 'business'" }, correct: "A", fact: "'Bus' is een afkorting van het Latijnse woord omnibus.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Welk bedrijf begon in 2009 met de eerste grote taxi-app?", options: { A: "Lyft", B: "Uber", C: "Via" }, correct: "B", fact: "Uber veranderde binnen een paar jaar hoe mensen een taxi bestellen.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Welke Belgische stad heeft een groot autovrij centrum?", options: { A: "Brussel", B: "Antwerpen", C: "Gent" }, correct: "C", fact: "Gent heeft een van de grootste autovrije centra van Europa.", type: "adjacent", difficulty: "moeilijk" }
     ],
     vervoer: [
-      { question: "Welk vervoer vind je NIET in Umob?", options: { A: "Deelscooter", B: "Waterfiets", C: "Deelauto" }, correct: "B", fact: "Waterfietsen zijn nog geen onderdeel van Umob.", type: "umob", difficulty: "makkelijk" },
-      { question: "Welke van deze drie zit WEL in Umob?", options: { A: "Taxi", B: "Zeppelin", C: "Kabelbaan" }, correct: "A", fact: "Taxi is één van de aanbieders die je via Umob kunt boeken.", type: "umob", difficulty: "makkelijk" },
-      { question: "Hoeveel soorten deelvervoer breng je samen in Umob?", options: { A: "Alleen scooters", B: "Scooters en fietsen", C: "Scooters, fietsen, auto's, taxi, OV en e-bikes" }, correct: "C", fact: "Umob bundelt vrijwel elk deelvervoer-type in één plek.", type: "umob", difficulty: "makkelijk" },
-      { question: "Welk vervoer is meestal het snelst voor een ritje van 2 km binnen de stad?", options: { A: "Deelauto in de spits", B: "Deelscooter", C: "Bus met 4 haltes" }, correct: "B", fact: "Voor korte ritjes wint een scooter vaak van auto's in de file.", type: "umob", difficulty: "middel" },
-      { question: "Wat is meestal duurder per kilometer in de stad?", options: { A: "Deelfiets", B: "Taxi", C: "OV" }, correct: "B", fact: "Taxi's zijn doorgaans de duurste optie per kilometer in de stad.", type: "umob", difficulty: "middel" },
-      { question: "Welk vervoer heeft geen accu of motor nodig?", options: { A: "E-bike", B: "Deelscooter", C: "Deelfiets" }, correct: "C", fact: "Een gewone deelfiets werkt volledig op spierkracht.", type: "umob", difficulty: "middel" },
-      { question: "Welk vervoer kun je meestal NIET gebruiken voor een rit tussen twee steden?", options: { A: "Trein/OV", B: "Deelscooter", C: "Deelauto" }, correct: "B", fact: "Scooters zijn gemaakt voor korte ritten binnen de stad, niet tussen steden.", type: "umob", difficulty: "moeilijk" },
-      { question: "Wat is het grootste voordeel van een e-bike ten opzichte van een gewone deelfiets bij een lange rit?", options: { A: "Hij is lichter", B: "Trapondersteuning, dus minder zweten", C: "Hij is goedkoper" }, correct: "B", fact: "Elektrische trapondersteuning maakt langere of heuvelachtige ritten een stuk makkelijker.", type: "umob", difficulty: "moeilijk" },
-      { question: "Wat is gemiddeld sneller in de binnenstad tijdens de spits?", options: { A: "Auto", B: "E-bike", C: "Bus" }, correct: "B", fact: "Op korte afstanden verslaat een e-bike vaak de auto in de spits.", type: "adjacent", difficulty: "makkelijk" },
-      { question: "Welk land staat bekend als bakermat van de Vespa-scooter?", options: { A: "Frankrijk", B: "Italië", C: "Spanje" }, correct: "B", fact: "De Vespa werd in 1946 in Italië geboren.", type: "adjacent", difficulty: "makkelijk" },
-      { question: "In welke stad werd de eerste grootschalige deelscooter (e-scooter) gelanceerd?", options: { A: "Santa Monica", B: "Berlijn", C: "Tokio" }, correct: "A", fact: "Santa Monica, Californië, was in 2017 het startpunt van de deelscooter-hype.", type: "adjacent", difficulty: "middel" },
-      { question: "Welk vervoermiddel werd rond 2001 uitgevonden door Dean Kamen?", options: { A: "De hoverboard", B: "De Segway", C: "De e-step" }, correct: "B", fact: "De Segway zou het straatbeeld revolutioneren — dat liep anders.", type: "adjacent", difficulty: "middel" },
-      { question: "Wat is een 'tuk-tuk'?", options: { A: "Een soort trein", B: "Een gemotoriseerde riksja", C: "Een elektrische fiets" }, correct: "B", fact: "Tuk-tuks zijn vooral bekend uit Zuidoost-Azië, zoals Bangkok.", type: "adjacent", difficulty: "middel" },
-      { question: "In welke stad ontstond het eerste grootschalige moderne stadsfietsdeelsysteem (Vélib', 2007)?", options: { A: "Amsterdam", B: "Parijs", C: "Kopenhagen" }, correct: "B", fact: "Vélib' in Parijs inspireerde talloze fietsdeelsystemen wereldwijd.", type: "adjacent", difficulty: "moeilijk" },
-      { question: "Welk Nederlands woord voor 'fiets' wordt in het buitenland soms letterlijk overgenomen, omdat er geen goede vertaling voor is?", options: { A: "'Fiets'", B: "'Bike'", C: "'Wheel'" }, correct: "A", fact: "Het woord 'fiets' is zo Nederlands dat het in sommige talen gewoon wordt overgenomen.", type: "adjacent", difficulty: "moeilijk" },
-      { question: "Wat is het belangrijkste kenmerk van 'MaaS' (Mobility as a Service)?", options: { A: "Gratis OV voor iedereen", B: "Alle vervoer combineren in één app", C: "Alleen elektrisch vervoer" }, correct: "B", fact: "MaaS draait om vervoer combineren zonder los per aanbieder te hoeven regelen — precies waar Umob op inspeelt.", type: "adjacent", difficulty: "moeilijk" },
-      { question: "Welk vervoer kies je in Umob meestal voor een boodschappenrit met wat tassen?", options: { A: "Deelscooter zonder opbergruimte", B: "Deelauto", C: "Kajak" }, correct: "B", fact: "Voor boodschappen met tassen is een auto vaak praktischer dan een scooter.", type: "umob", difficulty: "makkelijk" },
-      { question: "Welke twee vervoerstypes in Umob werken allebei op elektriciteit?", options: { A: "Deelfiets en OV", B: "Deelscooter en e-bike", C: "Taxi en lopen" }, correct: "B", fact: "Scooters en e-bikes draaien beide op een accu.", type: "umob", difficulty: "makkelijk" },
-      { question: "Wat heb je nodig om een deelauto via Umob te kunnen rijden?", options: { A: "Alleen je telefoon", B: "Een geldig rijbewijs", C: "Een eigen kenteken" }, correct: "B", fact: "Voor een deelauto heb je, logisch genoeg, gewoon een rijbewijs nodig.", type: "umob", difficulty: "makkelijk" },
-      { question: "Welk vervoer uit Umob is het meest geschikt bij een regenachtige, langere rit?", options: { A: "Deelscooter", B: "Deelfiets zonder overkapping", C: "Taxi of deelauto" }, correct: "C", fact: "Bij regen en afstand is een overdekte optie meestal de betere keuze.", type: "umob", difficulty: "middel" },
-      { question: "Wat is het grootste verschil tussen OV en de overige vervoerstypes in Umob?", options: { A: "OV rijdt op vaste routes en tijden, de rest is flexibel", B: "OV is altijd het duurst", C: "OV zit niet in Umob" }, correct: "A", fact: "OV volgt vaste routes en dienstregelingen, deelvervoer is flexibeler in plaats en tijd.", type: "umob", difficulty: "middel" },
-      { question: "Waarom kies je soms bewust voor een langzamer vervoerstype in Umob?", options: { A: "Omdat het altijd verplicht is", B: "Voor het gemak, de prijs of gewoon om te bewegen", C: "Omdat sneller vervoer niet bestaat" }, correct: "B", fact: "Soms is langzamer reizen bewust de fijnste of goedkoopste keuze.", type: "umob", difficulty: "middel" },
-      { question: "Welke twee vervoerstypes in Umob heb je typisch nodig als je zowel snel als flexibel over een langere afstand wilt reizen?", options: { A: "Lopen en fietsen", B: "Trein/OV gecombineerd met een scooter voor het laatste stukje", C: "Alleen een taxi de hele weg" }, correct: "B", fact: "OV voor de afstand, scooter voor het laatste stukje — een klassieke 'first/last mile'-combinatie.", type: "umob", difficulty: "moeilijk" },
-      { question: "Wat bepaalt vooral welk vervoerstype in Umob het slimst is voor jouw rit?", options: { A: "Alleen de kleur van het voertuig", B: "Afstand, tijdsdruk, bagage en weer samen", C: "Willekeur" }, correct: "B", fact: "De slimste keuze hangt af van een combinatie van factoren, niet van één ding.", type: "umob", difficulty: "moeilijk" },
-      { question: "Welk vervoermiddel wordt in Zuidoost-Azië vaak de 'motortaxi' genoemd en is razendsnel door de drukte?", options: { A: "De rickshaw", B: "De ojek/motortaxi", C: "De fietstaxi" }, correct: "B", fact: "In landen als Indonesië zijn motortaxi's (ojek) razendpopulair om files te omzeilen.", type: "adjacent", difficulty: "makkelijk" },
-      { question: "Wat is het belangrijkste verschil tussen een gewone fiets en een e-bike?", options: { A: "Kleur", B: "Elektrische trapondersteuning", C: "Aantal wielen" }, correct: "B", fact: "Een e-bike geeft een zetje bij het trappen, een gewone fiets niet.", type: "adjacent", difficulty: "makkelijk" },
-      { question: "In welke stad reed de allereerste elektrische tram ter wereld (1881)?", options: { A: "Berlijn", B: "Londen", C: "Parijs" }, correct: "A", fact: "De eerste elektrische tram reed al in 1881 rond Berlijn.", type: "adjacent", difficulty: "middel" },
-      { question: "Wat was de belangrijkste reden dat New York taxi's geel werden?", options: { A: "Geel was de goedkoopste verf", B: "Geel valt op afstand het beste op", C: "Geel was toevallig de merkkleur" }, correct: "B", fact: "Onderzoek wees uit dat geel van verre het makkelijkst opvalt — vandaar de New Yorkse taxikleur.", type: "adjacent", difficulty: "middel" },
-      { question: "Welk land heeft het langste hogesnelheidstreinnetwerk ter wereld (in kilometers)?", options: { A: "Japan", B: "China", C: "Frankrijk" }, correct: "B", fact: "China's hogesnelheidsnetwerk is inmiddels het langste ter wereld, en groeit nog steeds.", type: "adjacent", difficulty: "middel" },
-      { question: "Wat betekent de term 'first-mile/last-mile' letterlijk in vervoer?", options: { A: "De langste afstand van een reis", B: "Het eerste en laatste stukje van een reis, vaak met licht vervoer", C: "Een soort korting bij OV" }, correct: "B", fact: "First/last mile is vaak het lastigste stukje van een reis om efficiënt op te lossen.", type: "adjacent", difficulty: "moeilijk" },
-      { question: "Los Angeles had begin 20e eeuw ooit één van 's werelds grootste tramnetwerken — hoe heette dit systeem?", options: { A: "De Red Cars (Pacific Electric)", B: "De Yellow Line", C: "De Sunset Express" }, correct: "A", fact: "Het Pacific Electric-tramnetwerk werd later grotendeels ontmanteld ten gunste van de auto.", type: "adjacent", difficulty: "moeilijk" },
-      { question: "Wat is een 'super-app' in de context van mobiliteit?", options: { A: "Een app die alleen appjes verstuurt", B: "Een app die meerdere diensten (vervoer, betalen, etc.) combineert", C: "Een app die alleen in noodgevallen werkt" }, correct: "B", fact: "Super-apps bundelen meerdere diensten in één plek — precies de filosofie achter Umob.", type: "adjacent", difficulty: "moeilijk" }
+      { question: "Welk vervoer zit niet in Umob?", options: { A: "Deelscooter", B: "Waterfiets", C: "Deelauto" }, correct: "B", fact: "Een waterfiets zit er nog niet bij.", type: "umob", difficulty: "makkelijk" },
+      { question: "Welk vervoer zit wel in Umob?", options: { A: "Taxi", B: "Zeppelin", C: "Kabelbaan" }, correct: "A", fact: "Taxi is een van de vervoerders die je in Umob kunt boeken.", type: "umob", difficulty: "makkelijk" },
+      { question: "Hoeveel soorten vervoer breng je samen in Umob?", options: { A: "Alleen scooters", B: "Scooters en fietsen", C: "Scooters, fietsen, auto's, taxi, OV en e-bikes" }, correct: "C", fact: "Umob bundelt bijna elk soort deelvervoer in één app.", type: "umob", difficulty: "makkelijk" },
+      { question: "Welk vervoer is meestal het snelst voor 2 km in de stad?", options: { A: "Auto in de spits", B: "Deelscooter", C: "Bus met 4 haltes" }, correct: "B", fact: "Voor korte ritjes is een scooter vaak sneller dan een auto in de file.", type: "umob", difficulty: "middel" },
+      { question: "Wat is meestal duurder per kilometer in de stad?", options: { A: "Deelfiets", B: "Taxi", C: "OV" }, correct: "B", fact: "Een taxi is meestal de duurste keus per kilometer.", type: "umob", difficulty: "middel" },
+      { question: "Welk vervoer heeft geen accu of motor nodig?", options: { A: "E-bike", B: "Deelscooter", C: "Deelfiets" }, correct: "C", fact: "Een gewone deelfiets werkt alleen op spierkracht.", type: "umob", difficulty: "middel" },
+      { question: "Welk vervoer gebruik je meestal niet tussen twee steden?", options: { A: "Trein of OV", B: "Deelscooter", C: "Deelauto" }, correct: "B", fact: "Scooters zijn gemaakt voor korte ritten in de stad, niet tussen steden.", type: "umob", difficulty: "moeilijk" },
+      { question: "Wat is het voordeel van een e-bike bij een lange rit?", options: { A: "Hij is lichter", B: "Trapondersteuning, dus minder zweten", C: "Hij is goedkoper" }, correct: "B", fact: "Trapondersteuning maakt lange of heuvelachtige ritten makkelijker.", type: "umob", difficulty: "moeilijk" },
+      { question: "Welk vervoer kies je voor boodschappen met veel tassen?", options: { A: "Deelscooter zonder opbergruimte", B: "Deelauto", C: "Kajak" }, correct: "B", fact: "Voor boodschappen is een auto vaak handiger dan een scooter.", type: "umob", difficulty: "makkelijk" },
+      { question: "Welke twee vervoerders in Umob werken allebei op elektriciteit?", options: { A: "Deelfiets en OV", B: "Deelscooter en e-bike", C: "Taxi en lopen" }, correct: "B", fact: "Scooters en e-bikes werken allebei op een accu.", type: "umob", difficulty: "makkelijk" },
+      { question: "Wat heb je nodig om een deelauto in Umob te rijden?", options: { A: "Alleen je telefoon", B: "Een geldig rijbewijs", C: "Een eigen kenteken" }, correct: "B", fact: "Voor een deelauto heb je gewoon een rijbewijs nodig.", type: "umob", difficulty: "makkelijk" },
+      { question: "Welk vervoer is het beste bij een lange, regenachtige rit?", options: { A: "Deelscooter", B: "Deelfiets zonder overkapping", C: "Taxi of deelauto" }, correct: "C", fact: "Bij regen en afstand is een overdekte optie meestal fijner.", type: "umob", difficulty: "middel" },
+      { question: "Wat is het grote verschil tussen OV en de rest van Umob?", options: { A: "OV rijdt op vaste tijden, de rest is flexibel", B: "OV is altijd het duurst", C: "OV zit niet in Umob" }, correct: "A", fact: "OV volgt vaste routes en tijden, deelvervoer is flexibeler.", type: "umob", difficulty: "middel" },
+      { question: "Waarom kies je soms bewust voor langzamer vervoer in Umob?", options: { A: "Het is altijd verplicht", B: "Voor gemak, prijs of gewoon om te bewegen", C: "Sneller vervoer bestaat niet" }, correct: "B", fact: "Soms is langzamer reizen gewoon de fijnste keuze.", type: "umob", difficulty: "middel" },
+      { question: "Welke combinatie kies je voor een snelle, lange rit?", options: { A: "Lopen en fietsen", B: "OV voor de afstand, scooter voor het laatste stukje", C: "Alleen een taxi de hele weg" }, correct: "B", fact: "OV voor de afstand, scooter voor het laatste stukje: een handige combinatie.", type: "umob", difficulty: "moeilijk" },
+      { question: "Wat bepaalt vooral welk vervoer het slimst is voor jouw rit?", options: { A: "Alleen de kleur van het voertuig", B: "Afstand, tijd, bagage en weer samen", C: "Puur toeval" }, correct: "B", fact: "De beste keuze hangt af van meerdere dingen tegelijk.", type: "umob", difficulty: "moeilijk" },
+      { question: "Wat is meestal sneller in de spits in de stad?", options: { A: "Auto", B: "E-bike", C: "Bus" }, correct: "B", fact: "Op korte afstanden is een e-bike vaak sneller dan de auto in de spits.", type: "adjacent", difficulty: "makkelijk" },
+      { question: "Uit welk land komt de Vespa-scooter?", options: { A: "Frankrijk", B: "Italië", C: "Spanje" }, correct: "B", fact: "De Vespa komt uit Italië, vanaf 1946.", type: "adjacent", difficulty: "makkelijk" },
+      { question: "In welke stad kwam de eerste grote deelscooter?", options: { A: "Santa Monica", B: "Berlijn", C: "Tokio" }, correct: "A", fact: "In 2017 begon de deelscooter-hype in Santa Monica.", type: "adjacent", difficulty: "middel" },
+      { question: "Wie bedacht de Segway, rond 2001?", options: { A: "Dean Kamen", B: "Elon Musk", C: "Steve Jobs" }, correct: "A", fact: "De Segway zou het straatbeeld veranderen — dat liep anders.", type: "adjacent", difficulty: "middel" },
+      { question: "Wat is een tuk-tuk?", options: { A: "Een soort trein", B: "Een gemotoriseerde riksja", C: "Een elektrische fiets" }, correct: "B", fact: "Tuk-tuks zie je vooral in landen als Thailand.", type: "adjacent", difficulty: "middel" },
+      { question: "In welke stad kwam het eerste grote fietsdeelsysteem, in 2007?", options: { A: "Amsterdam", B: "Parijs", C: "Kopenhagen" }, correct: "B", fact: "Vélib' in Parijs was een voorbeeld voor veel andere steden.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Waar komt het woord 'taxi' vandaan?", options: { A: "Van 'taximeter'", B: "Van een Franse chauffeur", C: "Van 'taxfree'" }, correct: "A", fact: "'Taxi' komt van taximeter, het apparaat dat de rit meet.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Wat betekent het als vervoer 'gecombineerd' is in één app?", options: { A: "Gratis OV voor iedereen", B: "Alle vervoer samen in één app", C: "Alleen elektrisch vervoer" }, correct: "B", fact: "Dat is precies waar Umob op inspeelt: alles samen in één app.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Hoe heet het vervoer dat je vaak ziet in Zuidoost-Azië, snel door de drukte?", options: { A: "De rickshaw", B: "De motortaxi", C: "De fietstaxi" }, correct: "B", fact: "In landen als Indonesië zijn motortaxi's heel populair.", type: "adjacent", difficulty: "makkelijk" },
+      { question: "Wat is het grote verschil tussen een gewone fiets en een e-bike?", options: { A: "De kleur", B: "Elektrische trapondersteuning", C: "Het aantal wielen" }, correct: "B", fact: "Een e-bike geeft een zetje bij het trappen, een gewone fiets niet.", type: "adjacent", difficulty: "makkelijk" },
+      { question: "In welke stad reed de eerste elektrische tram, in 1881?", options: { A: "Berlijn", B: "Wenen", C: "Parijs" }, correct: "A", fact: "De eerste elektrische tram reed al in 1881 in Berlijn.", type: "adjacent", difficulty: "middel" },
+      { question: "Waarom zijn taxi's in New York geel?", options: { A: "Geel was de goedkoopste verf", B: "Geel valt van ver het beste op", C: "Het was toeval" }, correct: "B", fact: "Onderzoek liet zien dat geel op afstand het snelst opvalt.", type: "adjacent", difficulty: "middel" },
+      { question: "Welk land heeft het langste hogesnelheidsspoor ter wereld?", options: { A: "Japan", B: "China", C: "Frankrijk" }, correct: "B", fact: "China heeft het langste hogesnelheidsnetwerk, en het groeit nog steeds.", type: "adjacent", difficulty: "middel" },
+      { question: "Wat is meestal het lastigste stukje van een lange reis om op te lossen?", options: { A: "Het middenstuk", B: "Het eerste en laatste stukje, van en naar huis", C: "Er is geen lastig stuk" }, correct: "B", fact: "Dat eerste en laatste stukje is vaak lastig — ideaal voor een scooter of fiets.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Los Angeles had ooit een groot tramnetwerk, met de bijnaam:", options: { A: "De Red Cars", B: "De Blue Line", C: "De Gold Rush Rails" }, correct: "A", fact: "Dit tramnetwerk werd later grotendeels afgebroken voor de auto.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Wat is een app die veel verschillende diensten in één plek combineert?", options: { A: "Een spamapp", B: "Een super-app", C: "Een noodapp" }, correct: "B", fact: "Een super-app bundelt meerdere diensten in één plek, zoals Umob doet.", type: "adjacent", difficulty: "moeilijk" }
     ],
     slim: [
-      { question: "Rit van 4 km in de stad — wat is meestal het goedkoopst via Umob?", options: { A: "Deelscooter", B: "Deelauto", C: "Taxi" }, correct: "A", fact: "Voor korte ritjes is een scooter meestal de goedkoopste keuze.", type: "umob", difficulty: "makkelijk" },
-      { question: "Wat helpt je in Umob om de goedkoopste optie te vinden?", options: { A: "Een prijsvergelijking tussen aanbieders", B: "Gokken", C: "Altijd voor de auto kiezen" }, correct: "A", fact: "Umob laat je prijzen tussen aanbieders direct naast elkaar zien.", type: "umob", difficulty: "makkelijk" },
-      { question: "Wat bespaar je vooral door via Umob te boeken in plaats van losse apps?", options: { A: "Tijd door te vergelijken in één app", B: "Niks, overal hetzelfde", C: "Alleen data-verbruik" }, correct: "A", fact: "Eén app vergelijken is sneller dan tussen losse apps schakelen.", type: "umob", difficulty: "makkelijk" },
-      { question: "Rit van 8 km buiten de spits, geen haast — wat is vaak het slimst?", options: { A: "Taxi", B: "OV of deelfiets", C: "Deelscooter over de snelweg" }, correct: "B", fact: "Zonder haast is OV of fietsen vaak zowel goedkoper als net zo snel.", type: "umob", difficulty: "middel" },
-      { question: "Je hebt precies 10 minuten om een afspraak te halen, 1,5 km verderop — wat kies je?", options: { A: "Deelauto zoeken en parkeren", B: "Lopen", C: "Deelscooter of e-bike" }, correct: "C", fact: "Voor korte afstanden onder tijdsdruk wint een scooter het bijna altijd van autozoeken en parkeren.", type: "umob", difficulty: "middel" },
-      { question: "Wat is het grootste risico als je blind voor de duurste optie kiest zonder te vergelijken?", options: { A: "Je betaalt onnodig meer", B: "Je komt sneller aan", C: "Je krijgt korting" }, correct: "A", fact: "Vergelijken in Umob voorkomt dat je onnodig teveel betaalt.", type: "umob", difficulty: "middel" },
-      { question: "Bij een rit van 15 km met bagage — wat is meestal de slimste combinatie?", options: { A: "Lopen", B: "Deelauto of taxi", C: "Scooter met een tas op je rug" }, correct: "B", fact: "Bij afstand plus bagage wint comfort vaak van de goedkoopste losse optie.", type: "umob", difficulty: "moeilijk" },
-      { question: "Wanneer is het slim om vlak vóór vertrek nog even in Umob te vergelijken?", options: { A: "Nooit, prijzen zijn altijd hetzelfde", B: "Bij spits/drukte, prijs en beschikbaarheid wisselen", C: "Alleen in het weekend" }, correct: "B", fact: "Beschikbaarheid en prijs kunnen door de dag heen verschuiven, vooral in de spits.", type: "umob", difficulty: "moeilijk" },
-      { question: "Op welke afstand is fietsen gemiddeld sneller dan de auto in de stad?", options: { A: "Onder 2 km", B: "Onder 5 km", C: "Onder 10 km" }, correct: "B", fact: "Tot zo'n 5 km is de fiets in de stad vaak sneller door files en parkeren.", type: "adjacent", difficulty: "makkelijk" },
-      { question: "Wat kost je in de stad vaak meer tijd dan de rit zelf?", options: { A: "Instappen", B: "Een parkeerplek zoeken", C: "Betalen" }, correct: "B", fact: "Parkeren zoeken kan in drukke steden langer duren dan de rit zelf.", type: "adjacent", difficulty: "makkelijk" },
-      { question: "Wat is meestal de goedkoopste manier om 20 km buiten de spits af te leggen?", options: { A: "Taxi", B: "Trein/OV", C: "Deelauto alleen" }, correct: "B", fact: "Over langere afstanden is OV vaak de goedkoopste optie per kilometer.", type: "adjacent", difficulty: "middel" },
-      { question: "Wat bespaart gemiddeld het meeste geld op jaarbasis in de stad?", options: { A: "Een eigen auto", B: "Combinatie van fiets, OV en af en toe deelvervoer", C: "Elke dag taxi" }, correct: "B", fact: "Een eigen auto kost inclusief verzekering, parkeren en onderhoud al snel duizenden euro's per jaar.", type: "adjacent", difficulty: "middel" },
-      { question: "Wat is de snelste manier om tijdens de spits een korte afstand af te leggen in een drukke binnenstad?", options: { A: "Auto", B: "Fiets of scooter", C: "Bus" }, correct: "B", fact: "In de spits staat autoverkeer vaak stil, terwijl fietsers en scooters gewoon doorrijden.", type: "adjacent", difficulty: "middel" },
-      { question: "Wat is doorgaans de duurste fout die reizigers maken?", options: { A: "Te vroeg vertrekken", B: "Nooit vergelijken, altijd dezelfde optie kiezen", C: "Te veel lopen" }, correct: "B", fact: "Wie nooit vergelijkt, betaalt structureel meer dan nodig.", type: "adjacent", difficulty: "moeilijk" },
-      { question: "Bij regen en een korte afstand — wat is meestal het slimst?", options: { A: "Deelfiets zonder overkapping", B: "OV of een overdekte optie", C: "Lopen" }, correct: "B", fact: "Bij slecht weer is droog en overdekt reizen vaak de betere keuze, ook als het iets meer kost.", type: "adjacent", difficulty: "moeilijk" },
-      { question: "Waarom is 'de goedkoopste optie' niet altijd 'de slimste keuze'?", options: { A: "Omdat prijs nooit varieert", B: "Omdat tijd en gemak ook meetellen", C: "Omdat het altijd hetzelfde is" }, correct: "B", fact: "Slim reizen is een afweging tussen prijs, tijd én gemak — niet alleen de laagste prijs.", type: "adjacent", difficulty: "moeilijk" },
-      { question: "Je moet 3 km met een vriend(in) reizen en jullie willen samen — wat check je dan slim in Umob?", options: { A: "Of er een optie is voor 2 personen tegelijk, zoals een auto", B: "Niks, altijd los reizen", C: "Altijd lopen" }, correct: "A", fact: "Bij reizen met meerdere personen is een auto vaak slimmer dan losse scooters.", type: "umob", difficulty: "makkelijk" },
-      { question: "Waarom is het slim om in Umob te kijken vóórdat je een aanbieder kiest, in plaats van achteraf?", options: { A: "Achteraf kun je toch niet meer wisselen", B: "Vooraf zie je meteen de beste prijs/tijd-verhouding", C: "Het maakt geen verschil" }, correct: "B", fact: "Vooraf vergelijken voorkomt dat je achteraf spijt hebt van je keuze.", type: "umob", difficulty: "makkelijk" },
-      { question: "Wat kost je meestal het meest tijd als je NIET vergelijkt in Umob?", options: { A: "Het boeken zelf", B: "Rondlopen zoeken naar een betere optie", C: "Niks, vergelijken kost juist tijd" }, correct: "B", fact: "Vergelijken in de app is vaak sneller dan fysiek rondkijken naar alternatieven.", type: "umob", difficulty: "makkelijk" },
-      { question: "Rit van 6 km, je bent met bagage én je hebt tijd genoeg — wat is dan meestal een slimme afweging?", options: { A: "Prijs vs. gemak van de bagage", B: "Alleen de kleur van het voertuig", C: "Wat je buren zouden kiezen" }, correct: "A", fact: "Bij bagage weegt gemak vaak zwaarder mee dan de laagste prijs.", type: "umob", difficulty: "middel" },
-      { question: "Je zit midden in de spits en moet dringend ergens zijn — wat check je als eerste in Umob?", options: { A: "Welke optie nú het snelst beschikbaar is", B: "Welke optie het goedkoopst is, ongeacht tijd", C: "Niks, gewoon de eerste optie pakken" }, correct: "A", fact: "Bij haast weegt snelheid vaak zwaarder dan de laagste prijs.", type: "umob", difficulty: "middel" },
-      { question: "Wat is een slimme reden om soms bewust een duurdere optie te kiezen in Umob?", options: { A: "Tijdsdruk of slecht weer", B: "Om indruk te maken", C: "Nooit een goede reden" }, correct: "A", fact: "Soms is de duurdere optie de slimste keuze, bijvoorbeeld bij haast of slecht weer.", type: "umob", difficulty: "middel" },
-      { question: "Wat is het slimst als je een terugkerende rit hebt, zoals elke dag naar werk?", options: { A: "Elke dag opnieuw vergelijken", B: "Nooit vergelijken, gewoon gewoontegedrag", C: "Elke week even kort de opties checken" }, correct: "C", fact: "Prijzen en beschikbaarheid veranderen, dus af en toe checken loont ook bij vaste ritten.", type: "umob", difficulty: "moeilijk" },
-      { question: "Waarom kan 'de snelste optie' soms toch niet de slimste keuze zijn?", options: { A: "Omdat snelheid nooit belangrijk is", B: "Omdat het prijsverschil met een net iets langzamere optie groot kan zijn", C: "Omdat snelheid altijd gelijk staat aan duur" }, correct: "B", fact: "Een paar minuten langer reizen kan soms flink schelen in prijs.", type: "umob", difficulty: "moeilijk" },
-      { question: "Wat is meestal de grootste onzichtbare kostenpost van een eigen auto?", options: { A: "Benzine/laden", B: "Verzekering, onderhoud en waardevermindering samen", C: "Wassen" }, correct: "B", fact: "Verzekering, onderhoud en waardevermindering tellen vaak zwaarder mee dan brandstof alleen.", type: "adjacent", difficulty: "makkelijk" },
-      { question: "Wat is meestal het slimst bij een rit van minder dan 1 km?", options: { A: "Een deelauto bestellen", B: "Gewoon lopen", C: "Een taxi bellen" }, correct: "B", fact: "Voor hele korte afstanden is lopen vaak net zo snel als vervoer regelen.", type: "adjacent", difficulty: "makkelijk" },
-      { question: "Wat is een simpele vuistregel om te bepalen of fietsen sneller is dan de auto in de stad?", options: { A: "Onder de 5 km is fietsen vaak sneller", B: "Boven de 20 km is fietsen altijd sneller", C: "Er bestaat geen vuistregel" }, correct: "A", fact: "Tot zo'n 5 km wint de fiets het in de stad vaak van de auto door files en parkeren.", type: "adjacent", difficulty: "middel" },
-      { question: "Waarom is 'vroeg boeken' bij sommige vervoersvormen slimmer dan 'op het laatste moment'?", options: { A: "Prijzen en beschikbaarheid kunnen veranderen naarmate het drukker wordt", B: "Het maakt nooit verschil", C: "Vroeg boeken is altijd duurder" }, correct: "A", fact: "Bij drukte kan zowel de prijs als de beschikbaarheid verslechteren naarmate je later boekt.", type: "adjacent", difficulty: "middel" },
-      { question: "Wat is de slimste combinatie voor een rit van 30 km buiten de spits, zonder haast?", options: { A: "Trein of OV", B: "Alleen taxi", C: "Alleen lopen" }, correct: "A", fact: "Over lange afstanden zonder haast is OV vaak zowel goedkoper als ontspannen.", type: "adjacent", difficulty: "middel" },
-      { question: "Waarom kan het slim zijn om een rit in twee stukken te splitsen (bijvoorbeeld fiets + trein) in plaats van één lange rit?", options: { A: "Het is nooit slim", B: "Het kan sneller én goedkoper zijn dan één vervoersvorm de hele weg", C: "Het is altijd duurder" }, correct: "B", fact: "Combinaties van vervoer zijn vaak slimmer dan blind voor één optie de hele afstand kiezen.", type: "adjacent", difficulty: "moeilijk" },
-      { question: "Wat is een reden waarom mensen soms onnodig te veel betalen voor vervoer?", options: { A: "Ze vergelijken nooit en kiezen uit gewoonte", B: "Vervoer is altijd overal even duur", C: "Prijzen variëren nooit" }, correct: "A", fact: "Gewoontegedrag is een van de grootste redenen dat mensen structureel te veel betalen.", type: "adjacent", difficulty: "moeilijk" },
-      { question: "Wat weegt het zwaarst mee in een écht slimme reisbeslissing?", options: { A: "Alleen de prijs", B: "Een balans tussen prijs, tijd, gemak en situatie", C: "Altijd de snelste optie, koste wat het kost" }, correct: "B", fact: "Slim reizen draait om de juiste balans, niet om altijd hetzelfde criterium.", type: "adjacent", difficulty: "moeilijk" }
-    ],
-    app: [
-      { question: "Hoeveel accounts heb je nodig om alle aanbieders in Umob te gebruiken?", options: { A: "1", B: "3", C: "Per aanbieder één" }, correct: "A", fact: "Eén Umob-account is genoeg voor alle aangesloten aanbieders.", type: "umob", difficulty: "makkelijk" },
-      { question: "Hoe betaal je een rit die je via Umob boekt?", options: { A: "Los per aanbieder", B: "Rechtstreeks in de Umob-app", C: "Altijd contant" }, correct: "B", fact: "Pay-in-the-app: alles verloopt via de app zelf, geen losse betalingen.", type: "umob", difficulty: "makkelijk" },
-      { question: "Wat kun je in de Umob-app doen vóórdat je een rit boekt?", options: { A: "Prijzen en reistijd vergelijken", B: "Niets, je moet gewoon boeken", C: "Alleen de aanbieder kiezen op naam" }, correct: "A", fact: "Umob toont vooraf prijs én reistijd van verschillende aanbieders naast elkaar.", type: "umob", difficulty: "makkelijk" },
-      { question: "Wat gebeurt er als je in Umob van aanbieder wisselt tijdens het plannen van je reis?", options: { A: "Je moet een nieuwe app openen", B: "Je blijft in dezelfde app", C: "Je account wordt geblokkeerd" }, correct: "B", fact: "Wisselen tussen aanbieders gebeurt allemaal binnen dezelfde Umob-app.", type: "umob", difficulty: "middel" },
-      { question: "Wat is het belangrijkste voordeel van Umob boven losse aanbieder-apps?", options: { A: "Meer advertenties", B: "Eén overzicht in plaats van tientallen apps", C: "Gratis ritten" }, correct: "B", fact: "In plaats van tientallen losse apps heb je met Umob één overzicht.", type: "umob", difficulty: "middel" },
-      { question: "In hoeveel landen werkt jouw ene Umob-account?", options: { A: "Alleen je eigen land", B: "In alle landen waar Umob actief is", C: "Maximaal 3 landen" }, correct: "B", fact: "Je Umob-account werkt in elk land waar de app actief is — 20+ op dit moment.", type: "umob", difficulty: "middel" },
-      { question: "Wat vergelijkt Umob precies naast elkaar voor jouw rit?", options: { A: "Alleen de prijs", B: "Alleen de reistijd", C: "Zowel prijs als reistijd" }, correct: "C", fact: "Umob toont prijs én reistijd samen, zodat je een weloverwogen keuze maakt.", type: "umob", difficulty: "moeilijk" },
-      { question: "Waarom hoef je met Umob nooit apart af te rekenen per aanbieder?", options: { A: "Omdat alles gratis is", B: "Omdat betalen centraal in de app geregeld is", C: "Omdat je altijd contant betaalt" }, correct: "B", fact: "Alle betalingen lopen gecentraliseerd via de app, ongeacht welke aanbieder je kiest.", type: "umob", difficulty: "moeilijk" },
-      { question: "Wat is het grootste voordeel van één mobiliteits-app t.o.v. losse apps per aanbieder?", options: { A: "Minder accounts nodig", B: "Altijd korting", C: "Sneller internet" }, correct: "A", fact: "Eén app betekent één account in plaats van tientallen losse inlogs.", type: "adjacent", difficulty: "makkelijk" },
-      { question: "Wat is de belangrijkste reden dat mensen liever één reis-app gebruiken dan tien losse?", options: { A: "Overzicht en gemak", B: "Het is verplicht", C: "Het is altijd goedkoper" }, correct: "A", fact: "Overzicht en gemak zijn de belangrijkste redenen om apps te bundelen.", type: "adjacent", difficulty: "makkelijk" },
-      { question: "Hoe heet het concept waarbij je al je vervoer combineert in één dienst/app?", options: { A: "MaaS (Mobility as a Service)", B: "IoT", C: "SaaS" }, correct: "A", fact: "MaaS staat voor Mobility as a Service — alle vervoer in één plek.", type: "adjacent", difficulty: "middel" },
-      { question: "Wat is een veelgenoemd nadeel van tien losse vervoer-apps naast elkaar?", options: { A: "Te weinig functies", B: "Steeds opnieuw inloggen en betaalgegevens invoeren", C: "Te veel korting" }, correct: "B", fact: "Bij losse apps moet je telkens opnieuw inloggen en gegevens invoeren — tijdverlies.", type: "adjacent", difficulty: "middel" },
-      { question: "Waarom groeit de populariteit van 'super-apps' voor mobiliteit wereldwijd?", options: { A: "Mensen willen minder apps beheren", B: "Ze zijn verplicht", C: "Ze zijn altijd gratis" }, correct: "A", fact: "Minder apps beheren en alles centraal regelen spreekt steeds meer reizigers aan.", type: "adjacent", difficulty: "middel" },
-      { question: "Wat is meestal het grootste obstakel om over te stappen naar deelvervoer i.p.v. een eigen auto?", options: { A: "Gebrek aan overzicht/vertrouwen in beschikbaarheid", B: "Te weinig kleuropties", C: "Te snel" }, correct: "A", fact: "Onzekerheid over beschikbaarheid en overzicht weerhoudt mensen vaker dan prijs.", type: "adjacent", difficulty: "moeilijk" },
-      { question: "Wat betekent 'first-mile/last-mile' in mobiliteit?", options: { A: "Het eerste/laatste stukje van een reis, vaak licht vervoer", B: "De langste afstand van een reis", C: "Een soort korting" }, correct: "A", fact: "First-mile/last-mile gaat over dat stukje van huis naar OV-halte of andersom — vaak ideaal voor scooter of fiets.", type: "adjacent", difficulty: "moeilijk" },
-      { question: "Wat is het belangrijkste doel van prijs- en tijdvergelijking in een reis-app?", options: { A: "Reclame tonen", B: "Je helpen de beste keuze te maken per situatie", C: "Data verzamelen" }, correct: "B", fact: "Vergelijken bestaat om jou, per situatie, de beste keuze te laten maken.", type: "adjacent", difficulty: "moeilijk" },
-      { question: "Wat kun je NIET doen zonder de Umob-app te openen?", options: { A: "Een rit boeken via Umob", B: "Nadenken over je reis", C: "Met de trein reizen, los van Umob" }, correct: "A", fact: "Voor het daadwerkelijk boeken via Umob heb je de app nodig.", type: "umob", difficulty: "makkelijk" },
-      { question: "Wat zie je in de Umob-app als je een bestemming intikt?", options: { A: "Alleen het weer", B: "De verschillende vervoersopties met prijs en tijd", C: "Alleen advertenties" }, correct: "B", fact: "De app toont meteen je opties naast elkaar, met prijs en reistijd.", type: "umob", difficulty: "makkelijk" },
-      { question: "Wat gebeurt er met je ritgeschiedenis als je overstapt tussen aanbieders binnen Umob?", options: { A: "Die raak je kwijt", B: "Die blijft gewoon in je Umob-account", C: "Die moet je los bijhouden" }, correct: "B", fact: "Al je ritten via Umob blijven overzichtelijk in je eigen account staan.", type: "umob", difficulty: "makkelijk" },
-      { question: "Waarom heeft Umob als app meer waarde naarmate er meer aanbieders bij komen?", options: { A: "Meer keuze en betere vergelijking voor de gebruiker", B: "Meer advertenties", C: "Geen verschil" }, correct: "A", fact: "Hoe meer aanbieders aangesloten zijn, hoe completer de vergelijking wordt.", type: "umob", difficulty: "middel" },
-      { question: "Wat is het grootste risico als een reiziger tien losse apps gebruikt in plaats van Umob?", options: { A: "Overzicht kwijtraken en duurdere keuzes maken", B: "Sneller reizen", C: "Minder keuze" }, correct: "A", fact: "Zonder overzicht kies je sneller onbewust de duurdere optie.", type: "umob", difficulty: "middel" },
-      { question: "Wat maakt Umob makkelijker dan los onderhandelen of vergelijken via losse aanbieders?", options: { A: "Alles staat al naast elkaar in één scherm", B: "Je moet nog steeds elke aanbieder apart bellen", C: "Niks, het is hetzelfde werk" }, correct: "A", fact: "Eén scherm met alle opties bespaart je het handmatig vergelijken.", type: "umob", difficulty: "middel" },
-      { question: "Wat is de kern van Umob's belofte aan gebruikers?", options: { A: "Altijd de duurste optie tonen", B: "Overzicht, vergelijking en gemak in één app", C: "Alleen taxi's aanbieden" }, correct: "B", fact: "Overzicht, vergelijken en gemak — dat is precies waar Umob voor bestaat.", type: "umob", difficulty: "moeilijk" },
-      { question: "Wat verandert er NIET als Umob een nieuwe aanbieder toevoegt aan de app?", options: { A: "Je hoeft geen nieuw account aan te maken", B: "Je krijgt meteen korting", C: "Je moet een nieuwe app downloaden" }, correct: "A", fact: "Nieuwe aanbieders komen gewoon bij in je bestaande Umob-account.", type: "umob", difficulty: "moeilijk" },
-      { question: "Wat is het grootste gemak van alles in één app hebben, in plaats van verspreid over tien apps?", options: { A: "Minder tijd kwijt aan schakelen", B: "Meer reclame zien", C: "Meer wachtwoorden onthouden" }, correct: "A", fact: "Minder schakelen tussen apps betekent minder tijdverlies.", type: "adjacent", difficulty: "makkelijk" },
-      { question: "Waarom checken steeds meer mensen vooraf prijzen in een app voordat ze vervoer boeken?", options: { A: "Om verrassingen achteraf te voorkomen", B: "Omdat het verplicht is", C: "Uit verveling" }, correct: "A", fact: "Vooraf checken voorkomt vervelende verrassingen bij het afrekenen.", type: "adjacent", difficulty: "makkelijk" },
-      { question: "Wat is een belangrijk voordeel van real-time informatie in een reis-app?", options: { A: "Je ziet actuele beschikbaarheid en prijzen", B: "Je hoeft nooit meer te reizen", C: "Het is altijd gratis" }, correct: "A", fact: "Real-time info zorgt dat je ziet wat er nú beschikbaar is, niet gisteren.", type: "adjacent", difficulty: "middel" },
-      { question: "Wat is het nadeel van een reis-app die maar één aanbieder ondersteunt?", options: { A: "Je kunt niet vergelijken met alternatieven", B: "Hij is altijd sneller", C: "Geen nadeel" }, correct: "A", fact: "Zonder vergelijkingsmogelijkheid weet je nooit of je de beste deal hebt.", type: "adjacent", difficulty: "middel" },
-      { question: "Wat betekent het als een app 'aanbieder-onafhankelijk' is?", options: { A: "Hij werkt met meerdere aanbieders naast elkaar", B: "Hij werkt met precies één aanbieder", C: "Hij werkt helemaal niet" }, correct: "A", fact: "Aanbieder-onafhankelijk betekent dat de app niet aan één partij vastzit.", type: "adjacent", difficulty: "middel" },
-      { question: "Waarom zijn super-apps de laatste jaren populairder geworden in mobiliteit?", options: { A: "Doordat losse apps voor elke aanbieder onhandig werden gevonden", B: "Omdat overheden dit verplicht stellen", C: "Omdat ze altijd goedkoper zijn" }, correct: "A", fact: "De wildgroei aan losse apps was voor veel gebruikers reden om over te stappen op één gecombineerde app.", type: "adjacent", difficulty: "moeilijk" },
-      { question: "Wat is het belangrijkste dat een goede mobiliteits-app je bespaart, naast geld?", options: { A: "Tijd en mentale moeite van vergelijken", B: "Niks, alleen geld telt", C: "Alleen data-gebruik" }, correct: "A", fact: "Naast geld bespaar je vooral tijd en gedoe door niet zelf tien apps te hoeven vergelijken.", type: "adjacent", difficulty: "moeilijk" },
-      { question: "Wat is een reden dat mensen soms toch vasthouden aan losse, aanbiedergebonden apps?", options: { A: "Gewoonte of onbekendheid met alternatieven", B: "Omdat het altijd goedkoper is", C: "Omdat het verplicht is" }, correct: "A", fact: "Gewoontegedrag is vaak de grootste reden om niet over te stappen naar een gecombineerde app.", type: "adjacent", difficulty: "moeilijk" }
-    ],
-    weetjes: [
-      { question: "In hoeveel steden wereldwijd geeft Umob je toegang tot vervoer?", options: { A: "100+", B: "260+", C: "500+" }, correct: "B", fact: "Umob is actief in 260+ steden wereldwijd.", type: "umob", difficulty: "makkelijk" },
-      { question: "In hoeveel landen kun je met je Umob-account reizen?", options: { A: "5+", B: "20+", C: "50+" }, correct: "B", fact: "20+ landen — en dat groeit nog steeds.", type: "umob", difficulty: "makkelijk" },
+      { question: "Rit van 4 km in de stad — wat is meestal het goedkoopst?", options: { A: "Deelscooter", B: "Deelauto", C: "Taxi" }, correct: "A", fact: "Voor korte ritjes is een scooter meestal het goedkoopst.", type: "umob", difficulty: "makkelijk" },
+      { question: "Wat helpt je in Umob de goedkoopste optie te vinden?", options: { A: "Prijzen vergelijken", B: "Gokken", C: "Altijd de auto kiezen" }, correct: "A", fact: "Umob laat prijzen van aanbieders naast elkaar zien.", type: "umob", difficulty: "makkelijk" },
+      { question: "Wat bespaar je door via Umob te boeken, in plaats van losse apps?", options: { A: "Tijd, want je vergelijkt in één app", B: "Niks, overal hetzelfde", C: "Alleen data" }, correct: "A", fact: "Eén app vergelijken is sneller dan wisselen tussen losse apps.", type: "umob", difficulty: "makkelijk" },
+      { question: "Rit van 8 km, geen spits, geen haast — wat is dan slim?", options: { A: "Taxi", B: "OV of deelfiets", C: "Scooter over de snelweg" }, correct: "B", fact: "Zonder haast is OV of fietsen vaak zowel goedkoper als net zo snel.", type: "umob", difficulty: "middel" },
+      { question: "Je hebt 10 minuten voor een afspraak, 1,5 km verderop. Wat kies je?", options: { A: "Een auto zoeken en parkeren", B: "Lopen", C: "Scooter of e-bike" }, correct: "C", fact: "Voor korte afstanden met tijdsdruk wint een scooter bijna altijd.", type: "umob", difficulty: "middel" },
+      { question: "Wat is het risico als je blind de duurste optie kiest?", options: { A: "Je betaalt onnodig meer", B: "Je komt sneller aan", C: "Je krijgt korting" }, correct: "A", fact: "Vergelijken voorkomt dat je te veel betaalt.", type: "umob", difficulty: "middel" },
+      { question: "Rit van 15 km met bagage — wat is dan meestal slim?", options: { A: "Lopen", B: "Deelauto of taxi", C: "Scooter met een tas op je rug" }, correct: "B", fact: "Bij bagage weegt gemak vaak zwaarder dan de laagste prijs.", type: "umob", difficulty: "moeilijk" },
+      { question: "Wanneer is het slim om vlak voor vertrek nog even te vergelijken?", options: { A: "Nooit, prijzen zijn altijd hetzelfde", B: "Bij drukte, want prijs en beschikbaarheid wisselen", C: "Alleen in het weekend" }, correct: "B", fact: "Prijs en beschikbaarheid kunnen wisselen, vooral in de spits.", type: "umob", difficulty: "moeilijk" },
+      { question: "Je reist met 3 km samen met een vriend — wat check je slim in Umob?", options: { A: "Of er een optie is voor 2 personen, zoals een auto", B: "Niks, altijd los reizen", C: "Altijd lopen" }, correct: "A", fact: "Bij reizen met meerdere personen is een auto vaak slimmer dan losse scooters.", type: "umob", difficulty: "makkelijk" },
+      { question: "Waarom is het slim om vooraf te kijken in Umob, in plaats van achteraf?", options: { A: "Achteraf kun je toch niet meer wisselen", B: "Vooraf zie je meteen de beste prijs en tijd", C: "Het maakt geen verschil" }, correct: "B", fact: "Vooraf vergelijken voorkomt dat je achteraf spijt hebt van je keuze.", type: "umob", difficulty: "makkelijk" },
+      { question: "Wat kost je vaak de meeste tijd als je niet vergelijkt?", options: { A: "Het boeken zelf", B: "Rondkijken naar een betere optie", C: "Vergelijken zelf kost juist tijd" }, correct: "B", fact: "Vergelijken in de app is sneller dan zelf rondkijken.", type: "umob", difficulty: "middel" },
+      { question: "Rit van 6 km met bagage, en je hebt tijd genoeg — wat kies je?", options: { A: "Prijs versus gemak van de bagage", B: "Alleen de kleur van het voertuig", C: "Wat je buren zouden kiezen" }, correct: "A", fact: "Bij bagage weegt gemak vaak zwaarder mee dan de laagste prijs.", type: "umob", difficulty: "middel" },
+      { question: "Je zit in de spits en moet snel ergens zijn. Wat check je eerst?", options: { A: "Welke optie nú het snelst beschikbaar is", B: "Welke optie het goedkoopst is, ongeacht tijd", C: "Gewoon de eerste optie pakken" }, correct: "A", fact: "Bij haast weegt snelheid vaak zwaarder dan de laagste prijs.", type: "umob", difficulty: "middel" },
+      { question: "Wat is een goede reden om soms bewust een duurdere optie te kiezen?", options: { A: "Tijdsdruk of slecht weer", B: "Om indruk te maken", C: "Er is nooit een goede reden" }, correct: "A", fact: "Soms is de duurdere optie slim, bijvoorbeeld bij haast of slecht weer.", type: "umob", difficulty: "moeilijk" },
+      { question: "Wat is slim bij een rit die je elke dag maakt, zoals naar werk?", options: { A: "Elke dag opnieuw vergelijken", B: "Nooit vergelijken, gewoon gewoonte", C: "Elke week even kort de opties checken" }, correct: "C", fact: "Prijzen en beschikbaarheid veranderen, dus af en toe checken is slim.", type: "umob", difficulty: "moeilijk" },
+      { question: "Waarom is 'de snelste optie' soms toch niet de slimste keuze?", options: { A: "Snelheid is nooit belangrijk", B: "Een net iets langzamere optie kan veel goedkoper zijn", C: "Snel is altijd duur" }, correct: "B", fact: "Een paar minuten langer reizen kan soms flink schelen in prijs.", type: "umob", difficulty: "moeilijk" },
+      { question: "Op welke afstand is fietsen meestal sneller dan de auto in de stad?", options: { A: "Onder 2 km", B: "Onder 5 km", C: "Onder 10 km" }, correct: "B", fact: "Tot zo'n 5 km is fietsen in de stad vaak sneller.", type: "adjacent", difficulty: "makkelijk" },
+      { question: "Wat kost je vaak meer tijd dan de rit zelf?", options: { A: "Instappen", B: "Een parkeerplek zoeken", C: "Betalen" }, correct: "B", fact: "Een parkeerplek zoeken kan langer duren dan de rit zelf.", type: "adjacent", difficulty: "makkelijk" },
+      { question: "Wat is meestal het goedkoopst voor 20 km buiten de spits?", options: { A: "Taxi", B: "Trein of OV", C: "Alleen een deelauto" }, correct: "B", fact: "Over langere afstanden is OV vaak het goedkoopst per kilometer.", type: "adjacent", difficulty: "middel" },
+      { question: "Wat bespaart per jaar meestal het meeste geld?", options: { A: "Een eigen auto", B: "Fiets, OV en soms deelvervoer", C: "Elke dag een taxi" }, correct: "B", fact: "Een eigen auto kost al snel duizenden euro's per jaar.", type: "adjacent", difficulty: "middel" },
+      { question: "Wat is het snelst in de spits, in een drukke binnenstad?", options: { A: "Auto", B: "Fiets of scooter", C: "Bus" }, correct: "B", fact: "In de spits staat de auto vaak stil, terwijl fietsers gewoon doorrijden.", type: "adjacent", difficulty: "middel" },
+      { question: "Wat is meestal de duurste fout die reizigers maken?", options: { A: "Te vroeg vertrekken", B: "Nooit vergelijken, altijd dezelfde optie kiezen", C: "Te veel lopen" }, correct: "B", fact: "Wie nooit vergelijkt, betaalt vaak meer dan nodig.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Bij regen en een korte afstand, wat is meestal het slimst?", options: { A: "Deelfiets zonder overkapping", B: "OV of een overdekte optie", C: "Lopen" }, correct: "B", fact: "Bij regen is droog en overdekt reizen vaak fijner, ook al kost het iets meer.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Waarom is de goedkoopste optie niet altijd de slimste keuze?", options: { A: "Prijs verandert nooit", B: "Tijd en gemak tellen ook mee", C: "Het is altijd hetzelfde" }, correct: "B", fact: "Slim reizen is een balans tussen prijs, tijd en gemak.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Wat is meestal het slimst bij een rit van minder dan 1 km?", options: { A: "Een deelauto bestellen", B: "Gewoon lopen", C: "Een taxi bellen" }, correct: "B", fact: "Voor hele korte afstanden is lopen vaak net zo snel.", type: "adjacent", difficulty: "makkelijk" },
+      { question: "Wat is de simpele regel om te weten of fietsen sneller is dan de auto?", options: { A: "Onder de 5 km is fietsen vaak sneller", B: "Boven de 20 km is fietsen altijd sneller", C: "Er is geen regel" }, correct: "A", fact: "Tot zo'n 5 km wint de fiets het in de stad vaak van de auto.", type: "adjacent", difficulty: "makkelijk" },
+      { question: "Waarom is vroeg boeken soms slimmer dan op het laatste moment?", options: { A: "Prijs en beschikbaarheid kunnen slechter worden als het drukker wordt", B: "Het maakt nooit verschil", C: "Vroeg boeken is altijd duurder" }, correct: "A", fact: "Bij drukte kunnen prijs en beschikbaarheid slechter worden.", type: "adjacent", difficulty: "middel" },
+      { question: "Wat is meestal het slimst voor 30 km buiten de spits, zonder haast?", options: { A: "Trein of OV", B: "Alleen taxi", C: "Alleen lopen" }, correct: "A", fact: "Over lange afstanden zonder haast is OV vaak goedkoop en ontspannen.", type: "adjacent", difficulty: "middel" },
+      { question: "Waarom kan het slim zijn een rit te splitsen, bijvoorbeeld fiets plus trein?", options: { A: "Het is nooit slim", B: "Het kan sneller én goedkoper zijn", C: "Het is altijd duurder" }, correct: "B", fact: "Vervoer combineren is vaak slimmer dan één optie de hele weg gebruiken.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Wat is een reden dat mensen soms te veel betalen voor vervoer?", options: { A: "Ze vergelijken nooit en kiezen uit gewoonte", B: "Vervoer is altijd overal even duur", C: "Prijzen veranderen nooit" }, correct: "A", fact: "Gewoonte is een van de grootste redenen dat mensen te veel betalen.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Wat weegt het zwaarst mee in een echt slimme reiskeuze?", options: { A: "Alleen de prijs", B: "Een balans tussen prijs, tijd, gemak en situatie", C: "Altijd de snelste optie, wat het ook kost" }, correct: "B", fact: "Slim reizen draait om de juiste balans, niet om steeds hetzelfde.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Wat is vaak het slimst als je niet zeker weet welke optie het snelst is?", options: { A: "Gewoon gokken", B: "Prijs én reistijd vooraf checken", C: "Altijd de auto nemen" }, correct: "B", fact: "Vooraf checken voorkomt een verkeerde inschatting.", type: "adjacent", difficulty: "middel" },
+      { question: "In hoeveel steden kun je met Umob reizen?", options: { A: "100+", B: "260+", C: "500+" }, correct: "B", fact: "Umob is actief in meer dan 260 steden.", type: "umob", difficulty: "makkelijk" },
+      { question: "In hoeveel landen kun je met je Umob-account reizen?", options: { A: "5+", B: "20+", C: "50+" }, correct: "B", fact: "Meer dan 20 landen — en dat groeit nog steeds.", type: "umob", difficulty: "makkelijk" },
       { question: "Wat hoef je met Umob nooit meer te doen?", options: { A: "Los per aanbieder afrekenen", B: "Lopen", C: "Gratis reizen" }, correct: "A", fact: "Alles verloopt via één betaling, in één app.", type: "umob", difficulty: "makkelijk" },
-      { question: "Waarbij helpt Umob je vooral te kiezen?", options: { A: "Alleen de kleur van de scooter", B: "Prijs en reistijd van verschillende aanbieders", C: "Het merk van de auto" }, correct: "B", fact: "Umob zet prijs en reistijd naast elkaar zodat jij slim kunt kiezen.", type: "umob", difficulty: "middel" },
-      { question: "Hoeveel losse apps bespaar je door Umob te gebruiken in plaats van elke aanbieder apart?", options: { A: "Geen enkele", B: "Tientallen", C: "Precies twee" }, correct: "B", fact: "In plaats van tientallen losse apps: alles in Umob.", type: "umob", difficulty: "middel" },
-      { question: "Welke vervoerstypes vind je allemaal terug in Umob?", options: { A: "Alleen fietsen", B: "Scooters, fietsen, auto's, taxi, OV en e-bikes", C: "Alleen taxi's" }, correct: "B", fact: "Bijna elk deelvervoer-type zit gebundeld in Umob.", type: "umob", difficulty: "middel" },
-      { question: "Wanneer blijft je Umob-account gewoon werken?", options: { A: "Als je naar een ander land reist waar Umob actief is", B: "Alleen na een app-update", C: "Alleen met een nieuwe simkaart" }, correct: "A", fact: "Eén account, geldig in elk land waar Umob draait.", type: "umob", difficulty: "moeilijk" },
-      { question: "Wat is het hoofddoel van Umob?", options: { A: "Zoveel mogelijk losse apps maken", B: "Alle deelvervoer-aanbieders bundelen in één plek", C: "Alleen taxi's goedkoper maken" }, correct: "B", fact: "Umob bestaat om versnipperd deelvervoer weer overzichtelijk te maken.", type: "umob", difficulty: "moeilijk" },
-      { question: "Welke stad had als eerste ter wereld een grootschalig deelscooter-systeem?", options: { A: "Los Angeles", B: "Berlijn", C: "Santa Monica" }, correct: "C", fact: "Santa Monica, 2017 — het startpunt van de wereldwijde scooter-hype.", type: "adjacent", difficulty: "makkelijk" },
-      { question: "Wat is bijzonder aan Amsterdam qua fietsen?", options: { A: "Er zijn meer fietsen dan inwoners", B: "Er zijn meer auto's dan fietsen", C: "Er zijn meer bussen dan taxi's" }, correct: "A", fact: "Amsterdam telt letterlijk meer fietsen dan mensen.", type: "adjacent", difficulty: "makkelijk" },
+      { question: "Waarbij helpt Umob je vooral kiezen?", options: { A: "Alleen de kleur van de scooter", B: "Prijs en reistijd van verschillende aanbieders", C: "Het merk van de auto" }, correct: "B", fact: "Umob zet prijs en reistijd naast elkaar, zodat jij slim kunt kiezen.", type: "umob", difficulty: "middel" },
+      { question: "Hoeveel losse apps bespaar je door Umob te gebruiken?", options: { A: "Geen enkele", B: "Tientallen", C: "Precies twee" }, correct: "B", fact: "In plaats van tientallen losse apps: alles in Umob.", type: "umob", difficulty: "middel" },
+      { question: "Welke vervoerstypes vind je terug in Umob?", options: { A: "Alleen fietsen", B: "Scooters, fietsen, auto's, taxi, OV en e-bikes", C: "Alleen taxi's" }, correct: "B", fact: "Bijna elk soort deelvervoer zit in Umob.", type: "umob", difficulty: "middel" },
+      { question: "Wanneer blijft je Umob-account gewoon werken?", options: { A: "Als je naar een ander land reist waar Umob actief is", B: "Alleen na een update", C: "Alleen met een nieuwe simkaart" }, correct: "A", fact: "Eén account, geldig in elk land waar Umob draait.", type: "umob", difficulty: "moeilijk" },
+      { question: "Wat is het hoofddoel van Umob?", options: { A: "Zoveel mogelijk losse apps maken", B: "Alle deelvervoerders bundelen in één plek", C: "Alleen taxi's goedkoper maken" }, correct: "B", fact: "Umob bestaat om deelvervoer overzichtelijk te maken.", type: "umob", difficulty: "moeilijk" },
+      { question: "Hoeveel vervoerders breng je met Umob samen in één app?", options: { A: "Eén", B: "Tientallen", C: "Precies vijf" }, correct: "B", fact: "Umob bundelt tientallen aanbieders in slechts één app.", type: "umob", difficulty: "makkelijk" },
+      { question: "Waarop kun je je rit in Umob altijd vergelijken?", options: { A: "Alleen de kleur van het voertuig", B: "Prijs én reistijd tegelijk", C: "Alleen het merk" }, correct: "B", fact: "Prijs en reistijd worden in Umob altijd samen getoond.", type: "umob", difficulty: "makkelijk" },
+      { question: "Hoe vaak moet je je gegevens invoeren voor verschillende aanbieders in Umob?", options: { A: "Voor elke aanbieder opnieuw", B: "Maar één keer, voor je hele account", C: "Elke dag opnieuw" }, correct: "B", fact: "Eén keer invoeren is genoeg — daarna werkt het voor alle aanbieders.", type: "umob", difficulty: "makkelijk" },
+      { question: "Wat hoef je met Umob nooit meer te doen tijdens het reizen?", options: { A: "Tussen tien losse apps schakelen", B: "Buiten reizen", C: "Betalen voor je rit" }, correct: "A", fact: "Umob bespaart je het wisselen tussen losse vervoer-apps.", type: "umob", difficulty: "middel" },
+      { question: "Welk probleem lost Umob vooral op?", options: { A: "Te veel losse apps en aanbieders", B: "Te weinig auto's op de weg", C: "Te goedkoop OV" }, correct: "A", fact: "Deelvervoer overzichtelijk maken is precies waarom Umob bestaat.", type: "umob", difficulty: "middel" },
+      { question: "Wat blijft hetzelfde als je in Umob wisselt van vervoer tijdens één reis?", options: { A: "Je betaling en account", B: "Je wachtwoord verandert", C: "Je moet opnieuw inloggen" }, correct: "A", fact: "Je account en betaling blijven hetzelfde, ook als je wisselt.", type: "umob", difficulty: "middel" },
+      { question: "Waarom is het handig dat Umob prijs én reistijd tegelijk toont?", options: { A: "Zo zie je in één oogopslag de slimste keuze", B: "Het is wettelijk verplicht", C: "Om reclame te tonen" }, correct: "A", fact: "Prijs en tijd samen zien maakt vergelijken snel.", type: "umob", difficulty: "moeilijk" },
+      { question: "Als je account eenmaal bestaat, in hoeveel Umob-landen kun je het meteen gebruiken?", options: { A: "Alleen je eigen land", B: "In alle landen waar Umob actief is", C: "Maximaal 2 landen" }, correct: "B", fact: "Eén registratie is genoeg voor ieder land waar Umob actief is.", type: "umob", difficulty: "moeilijk" },
+      { question: "Welke stad had als eerste een grote deelscooter?", options: { A: "Los Angeles", B: "Berlijn", C: "Santa Monica" }, correct: "C", fact: "Santa Monica, 2017 — het startpunt van de scooter-hype.", type: "adjacent", difficulty: "makkelijk" },
+      { question: "Wat is bijzonder aan Amsterdam en fietsen?", options: { A: "Er zijn meer fietsen dan inwoners", B: "Er zijn meer auto's dan fietsen", C: "Er zijn meer bussen dan taxi's" }, correct: "A", fact: "Amsterdam telt meer fietsen dan mensen.", type: "adjacent", difficulty: "makkelijk" },
       { question: "Wat heeft Venetië helemaal niet?", options: { A: "Bruggen", B: "Auto's", C: "Boten" }, correct: "B", fact: "In Venetië verplaats je je alleen te voet of over water.", type: "adjacent", difficulty: "middel" },
       { question: "Waar komt het woord 'taxi' oorspronkelijk vandaan?", options: { A: "Taxfree", B: "Taximeter", C: "Taxatie" }, correct: "B", fact: "'Taxi' komt van taximeter, het apparaat dat de ritprijs meet.", type: "adjacent", difficulty: "middel" },
-      { question: "Waar stond het allereerste verkeerslicht ter wereld (1868)?", options: { A: "New York", B: "Londen", C: "Parijs" }, correct: "B", fact: "Dat allereerste verkeerslicht in Londen ontplofte binnen een maand door een gaslek.", type: "adjacent", difficulty: "middel" },
-      { question: "Waar en wanneer werd de Vespa-scooter uitgevonden?", options: { A: "1946, Italië", B: "1962, Frankrijk", C: "1978, Spanje" }, correct: "A", fact: "Na de Tweede Wereldoorlog werd de Vespa razendsnel populair in heel Europa.", type: "adjacent", difficulty: "moeilijk" },
-      { question: "Waarom zijn auto's in Singapore zo duur?", options: { A: "Om een parkeerplek te reserveren", B: "Je moet eerst een 'Certificate of Entitlement' kopen", C: "Om een rijbewijs B-plus te halen" }, correct: "B", fact: "Dat certificaat alleen al kan tienduizenden euro's kosten, nog vóór je de auto zelf betaalt.", type: "adjacent", difficulty: "moeilijk" },
-      { question: "Wanneer opende de Londense Underground, 's werelds oudste metro?", options: { A: "1863", B: "1901", C: "1922" }, correct: "A", fact: "De Underground is de oudste metro ter wereld — ouder dan de auto zelf.", type: "adjacent", difficulty: "moeilijk" },
-      { question: "Wist je dat: hoeveel vervoersaanbieders breng je met Umob samen in één app?", options: { A: "Eén", B: "Tientallen", C: "Precies vijf" }, correct: "B", fact: "Umob bundelt tientallen aanbieders in slechts één app.", type: "umob", difficulty: "makkelijk" },
-      { question: "Wist je dat je met Umob je rit altijd kunt vergelijken op:", options: { A: "Alleen de kleur van het voertuig", B: "Prijs én reistijd tegelijk", C: "Alleen het merk" }, correct: "B", fact: "Prijs en reistijd worden in Umob altijd samen getoond.", type: "umob", difficulty: "makkelijk" },
-      { question: "Wist je dat: hoeveel keer moet je met Umob je gegevens invoeren voor verschillende aanbieders?", options: { A: "Voor elke aanbieder opnieuw", B: "Maar één keer, voor je hele account", C: "Elke dag opnieuw" }, correct: "B", fact: "Eén keer invoeren is genoeg — daarna werkt het voor alle aanbieders.", type: "umob", difficulty: "makkelijk" },
-      { question: "Wist je dat je met Umob nooit meer hoeft te:", options: { A: "Tussen tien losse apps schakelen", B: "Buiten reizen", C: "Betalen voor je rit" }, correct: "A", fact: "Umob bespaart je het eindeloos wisselen tussen losse vervoer-apps.", type: "umob", difficulty: "middel" },
-      { question: "Wist je dat Umob is gebouwd om vooral dit probleem op te lossen:", options: { A: "Te veel losse apps en aanbieders voor deelvervoer", B: "Te weinig auto's op de weg", C: "Te goedkoop OV" }, correct: "A", fact: "Versnipperd deelvervoer overzichtelijk maken is precies waarom Umob bestaat.", type: "umob", difficulty: "middel" },
-      { question: "Wist je dat: wat blijft altijd hetzelfde als je in Umob van vervoerstype wisselt tijdens één reis?", options: { A: "Je betaling en account", B: "Je wachtwoord verandert", C: "Je moet opnieuw inloggen" }, correct: "A", fact: "Je account en betaling blijven consistent, ongeacht hoeveel keer je wisselt.", type: "umob", difficulty: "middel" },
-      { question: "Wist je dat: waarom is het handig dat Umob prijs én reistijd tegelijk toont?", options: { A: "Zodat je in één oogopslag de slimste keuze ziet", B: "Omdat het wettelijk verplicht is", C: "Om reclame te tonen" }, correct: "A", fact: "Prijs en tijd samen zien maakt vergelijken in seconden mogelijk.", type: "umob", difficulty: "moeilijk" },
-      { question: "Wist je dat: als je account eenmaal is aangemaakt, in hoeveel van de 20+ Umob-landen kun je het meteen gebruiken?", options: { A: "Alleen je eigen land", B: "In alle landen waar Umob actief is", C: "Maximaal 2 landen" }, correct: "B", fact: "Eén registratie is genoeg voor ieder land waar Umob draait.", type: "umob", difficulty: "moeilijk" },
-      { question: "Wist je dat: in welke stad reed 's werelds eerste elektrische tram (1881)?", options: { A: "Berlijn", B: "Wenen", C: "Amsterdam" }, correct: "A", fact: "Die allereerste elektrische tram reed rond Berlijn, meer dan 140 jaar geleden.", type: "adjacent", difficulty: "makkelijk" },
-      { question: "Wist je dat Nederland landelijk gemiddeld:", options: { A: "Meer fietsen dan inwoners heeft", B: "Meer auto's dan fietsen heeft", C: "Geen fietspaden heeft" }, correct: "A", fact: "Heel Nederland telt gemiddeld meer fietsen dan mensen.", type: "adjacent", difficulty: "makkelijk" },
-      { question: "Wist je dat: welk Zuid-Amerikaans land het busvervoer 'Bus Rapid Transit' (BRT) wereldwijd populair maakte?", options: { A: "Argentinië", B: "Brazilië", C: "Chili" }, correct: "B", fact: "De Braziliaanse stad Curitiba geldt als dé pionier van moderne BRT-systemen.", type: "adjacent", difficulty: "middel" },
-      { question: "Wist je dat: welk land het langste hogesnelheidsspoornetwerk ter wereld heeft?", options: { A: "Japan", B: "Frankrijk", C: "China" }, correct: "C", fact: "China's hogesnelheidsnetwerk is torenhoog het langste ter wereld.", type: "adjacent", difficulty: "middel" },
-      { question: "Wist je dat New York taxi's geel zijn vanwege:", options: { A: "De merkkleur van de eerste taxi-eigenaar", B: "Onderzoek naar de best zichtbare kleur op afstand", C: "Puur toeval" }, correct: "B", fact: "Geel bleek uit onderzoek de kleur die op afstand het snelst opvalt.", type: "adjacent", difficulty: "middel" },
-      { question: "Wist je dat: in welke Belgische stad ligt één van de grootste autovrije binnensteden van Europa?", options: { A: "Brussel", B: "Gent", C: "Luik" }, correct: "B", fact: "Gent koos bewust voor een grote autovrije stadskern.", type: "adjacent", difficulty: "moeilijk" },
-      { question: "Wist je dat: de Japanse Shinkansen ('bullet train') begon te rijden rond welk jaar?", options: { A: "1964", B: "1978", C: "1990" }, correct: "A", fact: "De Shinkansen ging rijden rond de Olympische Spelen van Tokio in 1964.", type: "adjacent", difficulty: "moeilijk" },
-      { question: "Wist je dat: Los Angeles ooit één van 's werelds grootste tramnetwerken had, met de bijnaam:", options: { A: "De Red Cars", B: "De Blue Line", C: "De Gold Rush Rails" }, correct: "A", fact: "Het Pacific Electric-tramnetwerk (de 'Red Cars') werd later grotendeels afgebroken ten gunste van de auto.", type: "adjacent", difficulty: "moeilijk" }
+      { question: "Waar stond het allereerste verkeerslicht ter wereld, in 1868?", options: { A: "New York", B: "Londen", C: "Parijs" }, correct: "B", fact: "Dat verkeerslicht in Londen ging binnen een maand kapot.", type: "adjacent", difficulty: "middel" },
+      { question: "Waar en wanneer werd de Vespa-scooter uitgevonden?", options: { A: "1946, Italië", B: "1962, Frankrijk", C: "1978, Spanje" }, correct: "A", fact: "Na de Tweede Wereldoorlog werd de Vespa snel populair in heel Europa.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Waarom zijn auto's in Singapore zo duur?", options: { A: "Je moet eerst een parkeerplek reserveren", B: "Je moet eerst een soort vergunning kopen", C: "Je moet een extra rijbewijs halen" }, correct: "B", fact: "Die vergunning alleen al kan tienduizenden euro's kosten.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Wanneer opende de metro van Londen, 's werelds oudste metro?", options: { A: "1863", B: "1901", C: "1922" }, correct: "A", fact: "De metro van Londen is ouder dan de auto zelf.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "In welke stad reed de eerste elektrische tram, in 1881?", options: { A: "Berlijn", B: "Wenen", C: "Amsterdam" }, correct: "A", fact: "Die eerste elektrische tram reed rond Berlijn, meer dan 140 jaar geleden.", type: "adjacent", difficulty: "makkelijk" },
+      { question: "Wat is bijzonder aan Nederland en fietsen?", options: { A: "Meer fietsen dan inwoners", B: "Meer auto's dan fietsen", C: "Geen fietspaden" }, correct: "A", fact: "Heel Nederland telt gemiddeld meer fietsen dan mensen.", type: "adjacent", difficulty: "makkelijk" },
+      { question: "Welk land maakte snelle busbanen wereldwijd populair?", options: { A: "Argentinië", B: "Brazilië", C: "Chili" }, correct: "B", fact: "De Braziliaanse stad Curitiba geldt als de bedenker van dit systeem.", type: "adjacent", difficulty: "middel" },
+      { question: "Welk land heeft het langste hogesnelheidsspoor ter wereld?", options: { A: "Japan", B: "Frankrijk", C: "China" }, correct: "C", fact: "China's hogesnelheidsnetwerk is veruit het langste ter wereld.", type: "adjacent", difficulty: "middel" },
+      { question: "Waarom zijn taxi's in New York geel?", options: { A: "De merkkleur van de eerste eigenaar", B: "Onderzoek naar de beste zichtbare kleur", C: "Puur toeval" }, correct: "B", fact: "Geel bleek uit onderzoek de kleur die op afstand het snelst opvalt.", type: "adjacent", difficulty: "middel" },
+      { question: "In welke Belgische stad ligt een groot autovrij centrum?", options: { A: "Brussel", B: "Gent", C: "Luik" }, correct: "B", fact: "Gent koos bewust voor een groot autovrij centrum.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Wanneer begon de Japanse Shinkansen te rijden?", options: { A: "1964", B: "1978", C: "1990" }, correct: "A", fact: "De Shinkansen ging rijden rond de Olympische Spelen van Tokio in 1964.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Los Angeles had ooit een groot tramnetwerk, met de bijnaam:", options: { A: "De Red Cars", B: "De Blue Line", C: "De Gold Rush Rails" }, correct: "A", fact: "Dit tramnetwerk werd later grotendeels afgebroken voor de auto.", type: "adjacent", difficulty: "moeilijk" }
     ],
-    battle: [
-      { question: "Kies één: hoe reis jij het liefst door de stad?", options: { A: "Alleen Umob voor al je ritten", B: "Los per aanbieder blijven kiezen", C: "Altijd de goedkoopste optie, ongeacht app" }, correct: "A", fact: "Meningen verdeeld — laat je antwoord in de comments!", type: "umob", difficulty: "makkelijk" },
-      { question: "Wat is erger?", options: { A: "Tien losse vervoer-apps op je telefoon", B: "Eén rit missen door verkeerde app", C: "Je account kwijtraken" }, correct: "A", fact: "De meesten kiezen voor minder apps — eens of oneens?", type: "umob", difficulty: "makkelijk" },
-      { question: "Kies je reisstijl: altijd vergelijken of altijd blind boeken?", options: { A: "Altijd vergelijken voor je boekt", B: "Altijd de eerste optie pakken", C: "Altijd de duurste, voor het comfort" }, correct: "A", fact: "Vergelijken wint meestal — maar niet iedereen heeft daar tijd voor!", type: "umob", difficulty: "makkelijk" },
-      { question: "Wat is irritanter?", options: { A: "Wisselen tussen tien apps voor je vervoer", B: "Wachten op een scooter die net weg is", C: "Een rit die 2 minuten vertraagd is" }, correct: "A", fact: "Appjes wisselen scoort hoog als grootste ergernis — herkenbaar?", type: "umob", difficulty: "middel" },
-      { question: "Kies: gemak of geld besparen?", options: { A: "Eén app voor alles, ook al iets duurder", B: "Los shoppen voor de beste deal, ook al kost dat tijd", C: "Maakt niet uit" }, correct: "A", fact: "Gemak vs. geld — waar sta jij?", type: "umob", difficulty: "middel" },
-      { question: "Wat zou je nooit meer willen?", options: { A: "Terug naar losse vervoer-apps", B: "Terug naar contant betalen voor een rit", C: "Terug naar papieren OV-kaartjes" }, correct: "A", fact: "Losse apps staan bovenaan de 'nooit meer'-lijst — of niet?", type: "umob", difficulty: "middel" },
-      { question: "Kies één: overzicht houden of zelf speurwerk doen?", options: { A: "Eén overzicht van alle vervoer, altijd", B: "Zelf altijd shoppen voor de beste prijs", C: "Maakt niet uit" }, correct: "A", fact: "Gemak wint van speurwerk bij de meeste mensen — jij ook?", type: "umob", difficulty: "moeilijk" },
-      { question: "Wat is de grootste tijdverspiller in vervoer?", options: { A: "Schakelen tussen losse apps en accounts", B: "Wachten op een rit", C: "Een omweg door de navigatie" }, correct: "A", fact: "Schakelen tussen apps kost vaak meer tijd dan de rit zelf!", type: "umob", difficulty: "moeilijk" },
-      { question: "Wat is erger op de fiets?", options: { A: "Regen in je gezicht", B: "Tegenwind", C: "Rood stoplicht bij elke kruising" }, correct: "C", fact: "Meningen verdeeld — laat je antwoord in de comments!", type: "adjacent", difficulty: "makkelijk" },
-      { question: "Kies één: welk vervoer mis je het minst?", options: { A: "Nooit meer OV", B: "Nooit meer auto", C: "Nooit meer fiets" }, correct: "B", fact: "Dit splitst elke groep — wat zou jij nooit meer willen?", type: "adjacent", difficulty: "makkelijk" },
-      { question: "Wat is erger in de spits?", options: { A: "Vast staan in de auto", B: "Een overvolle trein", C: "Regen op de fiets" }, correct: "A", fact: "Bijna iedereen haat vast staan — of vind jij de volle trein erger?", type: "adjacent", difficulty: "middel" },
-      { question: "Kies: wat is de grootste ergernis onderweg?", options: { A: "Altijd een parkeerplek zoeken", B: "Altijd wachten op de bus", C: "Altijd een lege deelscooter treffen" }, correct: "A", fact: "Parkeren zoeken wint de irritatie-award — akkoord?", type: "adjacent", difficulty: "middel" },
-      { question: "Wat is stommer om te doen?", options: { A: "Met de auto 500 meter rijden", B: "Een deelscooter pakken voor 5 minuten lopen", C: "Een taxi bestellen voor de hoek van de straat" }, correct: "A", fact: "500 meter met de auto is voor de meesten not done — of doe jij dat stiekem wel?", type: "adjacent", difficulty: "middel" },
-      { question: "Kies één: welk verkeersleed haat jij het meest?", options: { A: "Voor altijd vastzitten in de spits", B: "Voor altijd wachten op vertraagde treinen", C: "Voor altijd geen parkeerplek vinden" }, correct: "A", fact: "Geen enkele optie is leuk — welke haat jij het meest?", type: "adjacent", difficulty: "moeilijk" },
-      { question: "Wat is erger als reiziger?", options: { A: "Een rit die niet komt opdagen", B: "Een rit die veel te duur blijkt", C: "Een rit die de verkeerde kant op rijdt" }, correct: "A", fact: "Niet komen opdagen scoort het hoogst op de ergernis-schaal — eens?", type: "adjacent", difficulty: "moeilijk" },
-      { question: "Kies: hoe zou jij de hele stad willen doorkruisen?", options: { A: "De hele stad alleen te voet", B: "De hele stad alleen met de auto", C: "De hele stad alleen met OV" }, correct: "C", fact: "De meningen liggen hier flink uit elkaar — wat kies jij?", type: "adjacent", difficulty: "moeilijk" },
-      { question: "Kies één: wat zou jij het snelst opgeven voor meer gemak?", options: { A: "Altijd de allergoedkoopste rit zoeken", B: "Altijd je vaste aanbieder trouw blijven", C: "Nooit meer vergelijken" }, correct: "A", fact: "Gemak wint het vaak van de laatste paar centen besparen — of niet?", type: "umob", difficulty: "makkelijk" },
-      { question: "Wat is vervelender tijdens het reizen?", options: { A: "Een app die blijft laden", B: "Tien verschillende inlogschermen langs moeten", C: "Een scooter die net weg is" }, correct: "B", fact: "Steeds opnieuw inloggen scoort hoog op de ergernisschaal!", type: "umob", difficulty: "makkelijk" },
-      { question: "Kies: wat zou jij nooit accepteren van een vervoer-app?", options: { A: "Verborgen kosten die pas achteraf blijken", B: "Een simpel design", C: "Weinig kleuren in de app" }, correct: "A", fact: "Verrassingen bij het afrekenen zijn dé grootste ergernis — eens?", type: "umob", difficulty: "middel" },
-      { question: "Wat is stommer?", options: { A: "Nooit vergelijken en altijd te veel betalen", B: "Te lang vergelijken voor een ritje van 500 meter", C: "Beide even stom" }, correct: "C", fact: "Beide uitersten zijn een beetje dom — waar zit jij tussenin?", type: "umob", difficulty: "middel" },
-      { question: "Kies één: welke vervoersapp-ergernis herken jij het meest?", options: { A: "Steeds een nieuw account moeten maken", B: "Reclame tussen elke stap", C: "Trage laadtijden" }, correct: "A", fact: "Steeds opnieuw registreren wint vaak de irritatie-poll — of niet?", type: "umob", difficulty: "middel" },
-      { question: "Wat is erger voor je portemonnee op de lange termijn?", options: { A: "Nooit vergelijken uit gemakzucht", B: "Soms een euro te veel betalen door haast", C: "Beide even erg" }, correct: "A", fact: "Structureel nooit vergelijken kost op jaarbasis vaak het meest — eens?", type: "umob", difficulty: "moeilijk" },
-      { question: "Kies: wat zou jij het liefst nooit meer hoeven doen tijdens het reizen?", options: { A: "Schakelen tussen tien apps", B: "Wachten op een rit", C: "Zelf navigeren" }, correct: "A", fact: "Appjes wisselen wint steevast de 'nooit meer'-verkiezing!", type: "umob", difficulty: "moeilijk" },
-      { question: "Wat weegt zwaarder in jouw keuze van vervoer-app?", options: { A: "Overzicht en gemak", B: "De allerlaagste prijs, koste wat het kost", C: "Precies gelijk" }, correct: "A", fact: "De meeste mensen kiezen toch voor overzicht boven een paar cent besparen — jij ook?", type: "umob", difficulty: "moeilijk" },
-      { question: "Kies één: welk weertype maakt fietsen het ergst?", options: { A: "Regen", B: "Wind", C: "Hagel" }, correct: "A", fact: "Meningen verdeeld — laat je antwoord in de comments!", type: "adjacent", difficulty: "makkelijk" },
-      { question: "Wat is vervelender in het OV?", options: { A: "Geen zitplaats vinden", B: "Een vertraagde aansluiting missen", C: "Een stampvolle trein" }, correct: "B", fact: "Een aansluiting missen door vertraging scoort torenhoog als ergernis!", type: "adjacent", difficulty: "makkelijk" },
-      { question: "Kies: wat zou jij het liefst nooit meer hoeven meemaken in het verkeer?", options: { A: "Een file van uren", B: "Geen parkeerplek na eindeloos zoeken", C: "Een lekke band onderweg" }, correct: "A", fact: "Uren in de file staan wint bijna altijd de 'ergste ervaring'-poll!", type: "adjacent", difficulty: "middel" },
-      { question: "Wat is irritanter als voetganger?", options: { A: "Een fietser die door rood rijdt vlak langs je", B: "Een auto die te dicht passeert", C: "Een scooter op de stoep" }, correct: "C", fact: "Scooters op de stoep zijn een populaire ergernis bij voetgangers — eens?", type: "adjacent", difficulty: "middel" },
-      { question: "Kies één: wat zou jij het liefst afschaffen in het verkeer?", options: { A: "Files", B: "Wegwerkzaamheden in de spits", C: "Trage stoplichten" }, correct: "A", fact: "Files staan bijna altijd bovenaan als grootste verkeersergernis!", type: "adjacent", difficulty: "middel" },
-      { question: "Wat is een grotere verspilling van je tijd?", options: { A: "Vast staan in de file", B: "Wachten op vertraagd OV", C: "Rondjes rijden op zoek naar een parkeerplek" }, correct: "A", fact: "Filestaan wordt het vaakst genoemd als grootste tijdverspiller — of ben jij het daarmee oneens?", type: "adjacent", difficulty: "moeilijk" },
-      { question: "Kies: hoe zou jij het liefst nooit meer naar je werk hoeven reizen?", options: { A: "Met de auto in de spits", B: "Met een overvolle trein", C: "Op de fiets in de regen" }, correct: "A", fact: "De spitsfile wint meestal — maar niet iedereen is het daarmee eens!", type: "adjacent", difficulty: "moeilijk" },
-      { question: "Wat is de grootste stadsverkeersergernis van dit moment?", options: { A: "Te veel auto's", B: "Te weinig fietspaden", C: "Te weinig deelvervoer-opties" }, correct: "A", fact: "Te veel auto's in de stad blijft doorgaans bovenaan staan — herkenbaar?", type: "adjacent", difficulty: "moeilijk" }
+    app: [
+      { question: "Hoeveel accounts heb je nodig voor alle aanbieders in Umob?", options: { A: "1", B: "3", C: "Per aanbieder één" }, correct: "A", fact: "Eén Umob-account is genoeg voor alle aanbieders.", type: "umob", difficulty: "makkelijk" },
+      { question: "Waar betaal je een rit die je via Umob boekt?", options: { A: "Los per aanbieder", B: "Direct in de Umob-app", C: "Altijd contant" }, correct: "B", fact: "Alles verloopt via de app zelf, geen losse betalingen.", type: "umob", difficulty: "makkelijk" },
+      { question: "Wat kun je in de app doen voordat je een rit boekt?", options: { A: "Prijzen en reistijd vergelijken", B: "Niets, je moet gewoon boeken", C: "Alleen de aanbieder kiezen op naam" }, correct: "A", fact: "Umob toont vooraf prijs én reistijd van verschillende aanbieders.", type: "umob", difficulty: "makkelijk" },
+      { question: "Wat gebeurt er als je in Umob wisselt van aanbieder?", options: { A: "Je moet een nieuwe app openen", B: "Je blijft in dezelfde app", C: "Je account wordt geblokkeerd" }, correct: "B", fact: "Wisselen tussen aanbieders gebeurt allemaal in dezelfde app.", type: "umob", difficulty: "middel" },
+      { question: "Wat is het grootste voordeel van Umob boven losse apps?", options: { A: "Meer advertenties", B: "Eén overzicht in plaats van tientallen apps", C: "Gratis ritten" }, correct: "B", fact: "In plaats van tientallen losse apps heb je één overzicht.", type: "umob", difficulty: "middel" },
+      { question: "In hoeveel landen werkt jouw ene Umob-account?", options: { A: "Alleen je eigen land", B: "In alle landen waar Umob actief is", C: "Maximaal 3 landen" }, correct: "B", fact: "Je account werkt in elk land waar Umob actief is.", type: "umob", difficulty: "middel" },
+      { question: "Wat vergelijkt Umob voor jouw rit?", options: { A: "Alleen de prijs", B: "Alleen de reistijd", C: "Zowel prijs als reistijd" }, correct: "C", fact: "Umob toont prijs én reistijd samen.", type: "umob", difficulty: "moeilijk" },
+      { question: "Waarom hoef je met Umob nooit apart af te rekenen per aanbieder?", options: { A: "Omdat alles gratis is", B: "Omdat betalen in de app geregeld is", C: "Omdat je altijd contant betaalt" }, correct: "B", fact: "Alle betalingen lopen via de app, welke aanbieder je ook kiest.", type: "umob", difficulty: "moeilijk" },
+      { question: "Wat kun je niet doen zonder de Umob-app te openen?", options: { A: "Een rit boeken via Umob", B: "Nadenken over je reis", C: "Met de trein reizen, los van Umob" }, correct: "A", fact: "Voor het boeken via Umob heb je de app nodig.", type: "umob", difficulty: "makkelijk" },
+      { question: "Wat zie je in de app als je een bestemming intikt?", options: { A: "Alleen het weer", B: "Vervoersopties met prijs en tijd", C: "Alleen advertenties" }, correct: "B", fact: "De app toont meteen je opties naast elkaar.", type: "umob", difficulty: "makkelijk" },
+      { question: "Wat gebeurt er met je ritgeschiedenis als je wisselt van aanbieder?", options: { A: "Die raak je kwijt", B: "Die blijft in je Umob-account", C: "Die moet je los bijhouden" }, correct: "B", fact: "Al je ritten blijven overzichtelijk in je eigen account.", type: "umob", difficulty: "makkelijk" },
+      { question: "Waarom heeft Umob meer waarde als er meer aanbieders bij komen?", options: { A: "Meer keuze en betere vergelijking", B: "Meer advertenties", C: "Geen verschil" }, correct: "A", fact: "Hoe meer aanbieders, hoe completer de vergelijking.", type: "umob", difficulty: "middel" },
+      { question: "Wat is het risico als je tien losse apps gebruikt in plaats van Umob?", options: { A: "Overzicht kwijtraken en duurder kiezen", B: "Sneller reizen", C: "Minder keuze" }, correct: "A", fact: "Zonder overzicht kies je sneller onbewust de duurdere optie.", type: "umob", difficulty: "middel" },
+      { question: "Wat maakt Umob makkelijker dan losse aanbieders vergelijken?", options: { A: "Alles staat al naast elkaar in één scherm", B: "Je moet nog elke aanbieder apart bellen", C: "Niks, het is hetzelfde werk" }, correct: "A", fact: "Eén scherm met alle opties bespaart je het vergelijken.", type: "umob", difficulty: "moeilijk" },
+      { question: "Wat is de kern van Umob?", options: { A: "Altijd de duurste optie tonen", B: "Overzicht, vergelijking en gemak in één app", C: "Alleen taxi's aanbieden" }, correct: "B", fact: "Overzicht, vergelijken en gemak — dat is waar Umob voor bestaat.", type: "umob", difficulty: "moeilijk" },
+      { question: "Wat verandert er niet als Umob een nieuwe aanbieder toevoegt?", options: { A: "Je hoeft geen nieuw account te maken", B: "Je krijgt meteen korting", C: "Je moet een nieuwe app downloaden" }, correct: "A", fact: "Nieuwe aanbieders komen gewoon bij in je bestaande account.", type: "umob", difficulty: "moeilijk" },
+      { question: "Wat is het voordeel van één app in plaats van losse apps per aanbieder?", options: { A: "Minder accounts nodig", B: "Altijd korting", C: "Sneller internet" }, correct: "A", fact: "Eén app betekent één account in plaats van tientallen inlogs.", type: "adjacent", difficulty: "makkelijk" },
+      { question: "Waarom gebruiken mensen liever één reis-app dan tien losse?", options: { A: "Overzicht en gemak", B: "Het is verplicht", C: "Het is altijd goedkoper" }, correct: "A", fact: "Overzicht en gemak zijn de belangrijkste redenen.", type: "adjacent", difficulty: "makkelijk" },
+      { question: "Hoe heet het idee waarbij je al je vervoer combineert in één app?", options: { A: "Alles-in-één-mobiliteit", B: "IoT", C: "SaaS" }, correct: "A", fact: "Alle vervoer samen in één plek — precies waar Umob op inspeelt.", type: "adjacent", difficulty: "middel" },
+      { question: "Wat is een nadeel van tien losse vervoer-apps naast elkaar?", options: { A: "Te weinig functies", B: "Steeds opnieuw inloggen en gegevens invoeren", C: "Te veel korting" }, correct: "B", fact: "Bij losse apps moet je telkens opnieuw inloggen — tijdverlies.", type: "adjacent", difficulty: "middel" },
+      { question: "Waarom worden apps die alles combineren steeds populairder?", options: { A: "Mensen willen minder apps beheren", B: "Ze zijn verplicht", C: "Ze zijn altijd gratis" }, correct: "A", fact: "Minder apps beheren spreekt steeds meer mensen aan.", type: "adjacent", difficulty: "middel" },
+      { question: "Wat weerhoudt mensen er vaak van om deelvervoer te gebruiken in plaats van een eigen auto?", options: { A: "Weinig overzicht of vertrouwen in beschikbaarheid", B: "Te weinig kleuropties", C: "Het gaat te snel" }, correct: "A", fact: "Onzekerheid over beschikbaarheid weerhoudt mensen vaker dan prijs.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Wat is het laatste stukje van een reis, van bijvoorbeeld het station naar huis?", options: { A: "Het belangrijkste stukje", B: "Vaak licht vervoer, zoals scooter of fiets", C: "Een soort korting" }, correct: "B", fact: "Dat laatste stukje los je vaak op met een scooter of fiets.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Wat is het belangrijkste doel van prijs- en tijdvergelijking?", options: { A: "Reclame tonen", B: "Je de beste keuze laten maken", C: "Data verzamelen" }, correct: "B", fact: "Vergelijken bestaat om jou de beste keuze te laten maken.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Wat is het grootste gemak van alles in één app?", options: { A: "Minder tijd kwijt aan schakelen", B: "Meer reclame zien", C: "Meer wachtwoorden onthouden" }, correct: "A", fact: "Minder schakelen tussen apps betekent minder tijdverlies.", type: "adjacent", difficulty: "makkelijk" },
+      { question: "Waarom checken steeds meer mensen vooraf de prijs in een app?", options: { A: "Om verrassingen achteraf te voorkomen", B: "Omdat het verplicht is", C: "Uit verveling" }, correct: "A", fact: "Vooraf checken voorkomt vervelende verrassingen bij het afrekenen.", type: "adjacent", difficulty: "makkelijk" },
+      { question: "Wat is een voordeel van actuele informatie in een reis-app?", options: { A: "Je ziet wat er nú beschikbaar is", B: "Je hoeft nooit meer te reizen", C: "Het is altijd gratis" }, correct: "A", fact: "Actuele info laat zien wat er nu beschikbaar is, niet gisteren.", type: "adjacent", difficulty: "middel" },
+      { question: "Wat is het nadeel van een app die maar één aanbieder heeft?", options: { A: "Je kunt niet vergelijken met alternatieven", B: "Hij is altijd sneller", C: "Geen nadeel" }, correct: "A", fact: "Zonder vergelijken weet je nooit of je de beste deal hebt.", type: "adjacent", difficulty: "middel" },
+      { question: "Wat betekent het als een app met meerdere aanbieders werkt?", options: { A: "Hij werkt met meerdere aanbieders naast elkaar", B: "Hij werkt met precies één aanbieder", C: "Hij werkt helemaal niet" }, correct: "A", fact: "Zo'n app zit niet vast aan één partij.", type: "adjacent", difficulty: "middel" },
+      { question: "Waarom werden apps die alles combineren de laatste jaren populairder?", options: { A: "Losse apps voor elke aanbieder werden onhandig gevonden", B: "Overheden verplichten dit", C: "Ze zijn altijd goedkoper" }, correct: "A", fact: "Veel losse apps naast elkaar was voor veel mensen reden om over te stappen.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Wat bespaart een goede mobiliteits-app je, naast geld?", options: { A: "Tijd en moeite van vergelijken", B: "Niks, alleen geld telt", C: "Alleen data-gebruik" }, correct: "A", fact: "Naast geld bespaar je vooral tijd en gedoe.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Waarom houden mensen soms toch vast aan losse apps?", options: { A: "Gewoonte of onbekendheid met alternatieven", B: "Omdat het altijd goedkoper is", C: "Omdat het verplicht is" }, correct: "A", fact: "Gewoonte is vaak de grootste reden om niet over te stappen.", type: "adjacent", difficulty: "moeilijk" }
+    ],
+    kosten: [
+      { question: "Wat laat Umob je zien voordat je een rit boekt?", options: { A: "Alleen de kleur van het voertuig", B: "De prijs van je rit", C: "Niks, je betaalt achteraf blind" }, correct: "B", fact: "Umob toont de prijs altijd vooraf, geen verrassingen achteraf.", type: "umob", difficulty: "makkelijk" },
+      { question: "Waar betaal je je rit als je Umob gebruikt?", options: { A: "Los bij de aanbieder", B: "Direct in de Umob-app", C: "Alleen contant" }, correct: "B", fact: "Alles wordt in de app zelf afgerekend, in één keer.", type: "umob", difficulty: "makkelijk" },
+      { question: "Wat kost het je extra om meerdere aanbieders via Umob te gebruiken?", options: { A: "Een apart abonnement per aanbieder", B: "Niets extra, één account is genoeg", C: "Een vaste maandelijkse toeslag" }, correct: "B", fact: "Je hebt maar één account nodig, geen extra kosten per aanbieder.", type: "umob", difficulty: "makkelijk" },
+      { question: "Hoe zie je in Umob of een rit duur of goedkoop is?", options: { A: "Door te gokken", B: "Door de prijzen te vergelijken in de app", C: "Door het te vragen aan de chauffeur" }, correct: "B", fact: "Vergelijken in de app laat meteen zien wat elke optie kost.", type: "umob", difficulty: "makkelijk" },
+      { question: "Wat gebeurt er als je in Umob een duurdere aanbieder kiest?", options: { A: "Je betaalt gewoon die prijs", B: "De app verplicht je de goedkoopste", C: "Je krijgt automatisch korting" }, correct: "A", fact: "Jij kiest zelf, de app laat alleen de opties zien.", type: "umob", difficulty: "makkelijk" },
+      { question: "Waarom is vergelijken in Umob slim voor je portemonnee?", options: { A: "Je ziet meteen welke optie het goedkoopst is", B: "Vergelijken maakt het duurder", C: "Prijzen zijn toch altijd hetzelfde" }, correct: "A", fact: "Vergelijken kan je flink laten besparen op je ritten.", type: "umob", difficulty: "middel" },
+      { question: "Wat kan er gebeuren als je niet vergelijkt in Umob?", options: { A: "Je betaalt altijd hetzelfde", B: "Je betaalt misschien meer dan nodig", C: "Je betaalt altijd de goedkoopste prijs" }, correct: "B", fact: "Zonder vergelijken loop je kans dat je meer betaalt dan nodig.", type: "umob", difficulty: "middel" },
+      { question: "Wat is het voordeel van betalen in de app bij Umob?", options: { A: "Je betaalt nooit", B: "Geen losse afrekenmomenten per aanbieder", C: "Je krijgt altijd korting" }, correct: "B", fact: "Alles loopt via één betaling, welke aanbieder je ook kiest.", type: "umob", difficulty: "middel" },
+      { question: "Hoeveel keer moet je je betaalgegevens invoeren in Umob?", options: { A: "Voor elke aanbieder opnieuw", B: "Eén keer, voor je hele account", C: "Elke week opnieuw" }, correct: "B", fact: "Je vult je betaalgegevens maar één keer in, voor alle aanbieders.", type: "umob", difficulty: "middel" },
+      { question: "Wat helpt je het meest om niet te veel te betalen voor een rit?", options: { A: "Blind boeken", B: "Prijs en reistijd samen bekijken", C: "Altijd de eerste optie pakken" }, correct: "B", fact: "Prijs én reistijd samen zien geeft je de beste keuze.", type: "umob", difficulty: "middel" },
+      { question: "Waarom kan dezelfde rit op verschillende momenten een andere prijs hebben?", options: { A: "Prijzen hangen af van vraag en beschikbaarheid", B: "De app verandert prijzen zomaar", C: "Prijzen zijn altijd exact hetzelfde" }, correct: "A", fact: "Prijs en beschikbaarheid kunnen wisselen, bijvoorbeeld in de spits.", type: "umob", difficulty: "moeilijk" },
+      { question: "Wat bespaar je vooral door in Umob te vergelijken?", options: { A: "Alleen tijd", B: "Geld én tijd samen", C: "Alleen data" }, correct: "B", fact: "Vergelijken bespaart je zowel geld als tijd tegelijk.", type: "umob", difficulty: "moeilijk" },
+      { question: "Wat is het risico als je nooit prijzen vergelijkt in Umob?", options: { A: "Je betaalt vaak te veel", B: "Je reist altijd sneller", C: "Je krijgt automatisch korting" }, correct: "A", fact: "Nooit vergelijken kan je op termijn flink geld kosten.", type: "umob", difficulty: "moeilijk" },
+      { question: "Waarom toont Umob de prijs altijd vóór je boekt?", options: { A: "Zodat jij bewust kunt kiezen", B: "Omdat het wettelijk verplicht is", C: "Om reclame te tonen" }, correct: "A", fact: "Vooraf de prijs zien geeft jou de controle.", type: "umob", difficulty: "moeilijk" },
+      { question: "Wat verandert er aan de kosten als Umob een nieuwe aanbieder toevoegt?", options: { A: "Bestaande ritten worden duurder", B: "Je krijgt een extra optie om te vergelijken", C: "Je moet meer betalen voor je account" }, correct: "B", fact: "Meer aanbieders betekent alleen maar meer keuze om te vergelijken.", type: "umob", difficulty: "moeilijk" },
+      { question: "Wat is de kern van hoe Umob je geld kan besparen?", options: { A: "Door altijd de duurste optie te tonen", B: "Door prijs en tijd van alle aanbieders naast elkaar te zetten", C: "Door reclame te tonen" }, correct: "B", fact: "Alles naast elkaar zien is de basis van slim besparen.", type: "umob", difficulty: "moeilijk" },
+      { question: "Wat is meestal de duurste manier voor een korte afstand in de stad?", options: { A: "Lopen", B: "Taxi", C: "Fietsen" }, correct: "B", fact: "Een taxi is meestal de duurste optie per kilometer in de stad.", type: "adjacent", difficulty: "makkelijk" },
+      { question: "Wat kost je normaal gesproken niks?", options: { A: "Een taxirit", B: "Lopen", C: "Een deelauto huren" }, correct: "B", fact: "Lopen is de enige optie die altijd helemaal gratis is.", type: "adjacent", difficulty: "makkelijk" },
+      { question: "Wat is meestal de grootste kostenpost van een eigen auto, naast de aankoop?", options: { A: "Wassen", B: "Verzekering en onderhoud", C: "De kleur laten spuiten" }, correct: "B", fact: "Verzekering en onderhoud kosten op jaarbasis vaak meer dan je denkt.", type: "adjacent", difficulty: "makkelijk" },
+      { question: "Wat is meestal voordeliger als je vaak met het OV reist?", options: { A: "Losse kaartjes", B: "Een abonnement", C: "Maakt niks uit" }, correct: "B", fact: "Bij vaak reizen is een abonnement meestal voordeliger dan losse kaartjes.", type: "adjacent", difficulty: "makkelijk" },
+      { question: "Wat kost meestal meer: een korte rit met de auto of met de fiets?", options: { A: "De auto", B: "De fiets", C: "Precies hetzelfde" }, correct: "A", fact: "Fietsen kost bijna niks, een auto kost al snel brandstof en parkeren.", type: "adjacent", difficulty: "makkelijk" },
+      { question: "Waarom is een deelauto voor sommige mensen goedkoper dan een eigen auto?", options: { A: "Je betaalt alleen als je 'm gebruikt", B: "Deelauto's zijn altijd nieuwer", C: "Deelauto's hebben geen verzekering nodig" }, correct: "A", fact: "Bij een deelauto betaal je per gebruik, in plaats van altijd vaste kosten.", type: "adjacent", difficulty: "middel" },
+      { question: "Wat is meestal de goedkoopste manier om lange afstanden af te leggen?", options: { A: "De hele weg met de taxi", B: "Trein of OV", C: "Een deelauto voor de hele reis" }, correct: "B", fact: "Over lange afstanden is de trein vaak veruit de goedkoopste optie.", type: "adjacent", difficulty: "middel" },
+      { question: "Wat kost je vaak onnodig geld als je niet oplet in het OV?", options: { A: "Vergeten uit te checken", B: "Op tijd aankomen", C: "Een geldig vervoerbewijs hebben" }, correct: "A", fact: "Vergeten uit te checken kan je flink extra geld kosten.", type: "adjacent", difficulty: "middel" },
+      { question: "Wat is meestal duurder als je meerdere ritten op een dag maakt?", options: { A: "Losse kaartjes", B: "Een dagkaart", C: "Precies gelijk" }, correct: "A", fact: "Bij meerdere ritten op een dag is een dagkaart vaak voordeliger.", type: "adjacent", difficulty: "middel" },
+      { question: "Waarom is een parkeerplek in het centrum vaak zo duur?", options: { A: "Weinig ruimte en veel vraag", B: "De kleur van het asfalt", C: "Het is altijd gratis" }, correct: "A", fact: "Weinig ruimte en veel vraag maken parkeren in centra duur.", type: "adjacent", difficulty: "middel" },
+      { question: "Wat is een simpele manier om te besparen op woon-werkverkeer?", options: { A: "Fietsen of OV combineren in plaats van altijd de auto", B: "Elke dag een nieuwe auto kopen", C: "Altijd een taxi nemen" }, correct: "A", fact: "Fietsen of OV combineren kan op jaarbasis honderden euro's schelen.", type: "adjacent", difficulty: "middel" },
+      { question: "Wat is meestal de grootste verborgen kostenpost van een auto?", options: { A: "Brandstof", B: "De auto wordt minder waard", C: "Ruitenwissers" }, correct: "B", fact: "Een auto wordt vaak duizenden euro's per jaar minder waard.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Waarom kan reizen buiten de spits soms goedkoper zijn?", options: { A: "Sommige kaartjes zijn dan voordeliger", B: "Het is altijd precies hetzelfde", C: "Buiten de spits mag je niet reizen" }, correct: "A", fact: "Daluren zijn bij veel vervoer goedkoper dan de drukke spits.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Waarom besparen mensen vaak veel geld zonder eigen auto?", options: { A: "Geen verzekering, belasting, onderhoud en parkeerkosten meer", B: "Ze reizen dan nooit meer", C: "OV is altijd gratis" }, correct: "A", fact: "Al die vaste autokosten samen lopen op jaarbasis flink op.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Wat kost je uiteindelijk het meest?", options: { A: "Eén keer een dure rit", B: "Nooit vergelijken, keer op keer", C: "Beide evenveel" }, correct: "B", fact: "Op de lange termijn kost nooit vergelijken het meest.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Wat is de beste manier om kosten in vervoer laag te houden?", options: { A: "Altijd de auto pakken", B: "Vervoer combineren en vooraf vergelijken", C: "Nooit vooruit plannen" }, correct: "B", fact: "Combineren en vooraf vergelijken bespaart het meest.", type: "adjacent", difficulty: "moeilijk" }
     ]
   };
 
@@ -831,6 +991,27 @@
     return chosen;
   }
 
+  /* ==================== SPAM-LIMIT ====================
+     Client-side snelheidsrem: voorkomt dubbele/opeengestapelde vragen bij
+     snel doorklikken of bots die de knoppen automatisch indrukken. Er is
+     geen server meer om écht tegen te verifiëren — dit is een grens aan
+     hoe snel/veel er lokaal gegenereerd kan worden, geen harde beveiliging. */
+  const RATE_MIN_GAP_MS = 350;
+  const RATE_WINDOW_MS = 60000;
+  const RATE_MAX_IN_WINDOW = 25;
+  let lastGenerateAt = 0;
+  let generateTimestamps = [];
+
+  function isRateLimited() {
+    const now = Date.now();
+    if (now - lastGenerateAt < RATE_MIN_GAP_MS) return true;
+    generateTimestamps = generateTimestamps.filter(function (t) { return now - t < RATE_WINDOW_MS; });
+    if (generateTimestamps.length >= RATE_MAX_IN_WINDOW) return true;
+    generateTimestamps.push(now);
+    lastGenerateAt = now;
+    return false;
+  }
+
   /* ==================== GENERATION FLOW ====================
      Geen API meer nodig — een vraag "genereren" betekent hier: een nog niet
      getoonde vraag uit de lokale vragenbank kiezen. De korte timeout geeft
@@ -838,6 +1019,11 @@
   function generateQuestion(categoryId) {
     const category = CATEGORIES.find(function (c) { return c.id === categoryId; });
     if (!category) return;
+
+    // Extra kliks binnen de rem worden stil genegeerd — de huidige vraag (of
+    // loader) blijft gewoon staan, zodat "Nog één" nooit uit beeld verdwijnt.
+    if (isRateLimited()) return;
+
     currentCategoryId = categoryId;
 
     openQuestionModal();
