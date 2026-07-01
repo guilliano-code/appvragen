@@ -302,18 +302,6 @@
   .option-card.correct-answer .letter { background: var(--green); color: #08140C; }
   .option-card:active { transform: scale(0.99); }
 
-  .reveal-toggle {
-    width: 100%;
-    min-height: 52px;
-    border-radius: var(--radius-md);
-    background: var(--accent);
-    color: var(--accent-ink);
-    font-weight: 700;
-    font-size: 15px;
-    margin-bottom: 12px;
-  }
-  .reveal-toggle:active { opacity: 0.85; }
-
   .answer-box {
     display: none;
     background: var(--card-bg-alt);
@@ -791,15 +779,15 @@
 
     html += '<div class="options" id="options-list">';
     ["A", "B", "C"].forEach(function (letter) {
-      html += '<button type="button" class="option-card" data-letter="' + letter + '">' +
+      const isCorrect = letter === q.correct;
+      html += '<button type="button" class="option-card' + (isCorrect ? " correct-answer" : "") + '" data-letter="' + letter + '">' +
         '<span class="letter">' + letter + '</span>' +
         '<span>' + escapeHTML(q.options[letter]) + '</span>' +
         '</button>';
     });
     html += '</div>';
 
-    html += '<button class="reveal-toggle" type="button" id="reveal-toggle">Toon antwoord</button>';
-    html += '<div class="answer-box" id="answer-box">';
+    html += '<div class="answer-box open" id="answer-box">';
     html += '<div class="correct-label">✅ Juist antwoord: ' + q.correct + ') ' + escapeHTML(q.options[q.correct]) + '</div>';
     html += '<div class="fact-text">💡 ' + escapeHTML(q.fact) + '</div>';
     html += '</div>';
@@ -816,19 +804,6 @@
         document.querySelectorAll("#options-list .option-card").forEach(function (b) { b.classList.remove("selected"); });
         btn.classList.add("selected");
       });
-    });
-
-    document.getElementById("reveal-toggle").addEventListener("click", function () {
-      const box = document.getElementById("answer-box");
-      const isOpen = box.classList.toggle("open");
-      this.textContent = isOpen ? "Verberg antwoord" : "Toon antwoord";
-      if (isOpen) {
-        const correctBtn = document.querySelector('#options-list .option-card[data-letter="' + q.correct + '"]');
-        if (correctBtn) correctBtn.classList.add("correct-answer");
-      } else {
-        const correctBtn = document.querySelector('#options-list .option-card[data-letter="' + q.correct + '"]');
-        if (correctBtn) correctBtn.classList.remove("correct-answer");
-      }
     });
 
     document.getElementById("copy-btn").addEventListener("click", function () {
