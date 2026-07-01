@@ -374,58 +374,6 @@
 
   .loading-box p { color: var(--muted); font-weight: 600; }
 
-  .error-box { text-align: center; padding: 40px 10px 10px; }
-  .error-box .error-icon { font-size: 40px; margin-bottom: 12px; }
-  .error-box p { color: var(--ink); font-weight: 600; margin-bottom: 20px; line-height: 1.4; }
-  .error-box .countdown { color: var(--muted); font-weight: 700; margin-bottom: 14px; }
-  .btn-retry {
-    background: var(--accent);
-    color: var(--accent-ink);
-    min-height: 52px;
-    padding: 0 24px;
-    border-radius: var(--radius-md);
-    font-weight: 700;
-    font-size: 15px;
-  }
-  .btn-retry:disabled { opacity: 0.5; }
-
-  /* ---------- Welcome / API key ---------- */
-  .field-label { display: block; font-weight: 700; font-size: 14px; margin-bottom: 8px; }
-  .text-input {
-    width: 100%;
-    min-height: 52px;
-    border-radius: var(--radius-md);
-    border: 2px solid var(--border-subtle);
-    background: var(--card-bg-alt);
-    padding: 0 14px;
-    font-size: 16px;
-    margin-bottom: 14px;
-    color: var(--ink);
-  }
-  .text-input:focus { border-color: var(--accent); outline: none; }
-  .help-link { color: var(--accent); font-weight: 600; font-size: 14px; }
-  .btn-primary {
-    width: 100%;
-    min-height: 52px;
-    background: var(--accent);
-    color: var(--accent-ink);
-    border-radius: var(--radius-md);
-    font-weight: 700;
-    font-size: 16px;
-    margin-top: 6px;
-  }
-  .btn-primary:active { opacity: 0.85; }
-  .btn-secondary {
-    width: 100%;
-    min-height: 52px;
-    background: var(--card-bg-alt);
-    color: var(--ink);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-md);
-    font-weight: 700;
-    font-size: 15px;
-    margin-top: 10px;
-  }
   .btn-danger {
     width: 100%;
     min-height: 52px;
@@ -439,16 +387,6 @@
 
   .sheet h2 { font-size: 20px; margin: 0 0 14px; padding-right: 40px; color: var(--ink); }
   .sheet .subtle { color: var(--muted); font-size: 13px; margin: -8px 0 16px; line-height: 1.4; }
-  .key-display {
-    background: var(--card-bg-alt);
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-md);
-    padding: 12px 14px;
-    font-family: monospace;
-    font-size: 14px;
-    margin-bottom: 16px;
-    color: var(--ink);
-  }
 
   /* ---------- History ---------- */
   .filters-row { display: flex; gap: 8px; margin-bottom: 16px; }
@@ -566,7 +504,7 @@
   <div class="sheet" role="dialog" aria-modal="true">
     <button class="sheet-close" id="settings-close" type="button" aria-label="Sluiten">✕</button>
     <h2>Instellingen</h2>
-    <p class="subtle">Vraaggeneratie loopt via een server-side proxy — geen API key nodig in de browser.</p>
+    <p class="subtle">Vragen komen uit een vaste, lokale vragenbank (~96 vragen) — geen API of internetverbinding nodig.</p>
     <button class="btn-danger" id="settings-clear-all" type="button">Geschiedenis wissen</button>
   </div>
 </div>
@@ -577,103 +515,138 @@
 
   /* ==================== CONFIG ==================== */
   const CONFIG = {
-    // Makkelijk aanpasbaar: pas dit model-ID aan om een ander Claude-model te gebruiken.
-    // Let op: het model wordt ook hardcoded gebruikt in /api/generate.js (server-side) — pas daar mee aan.
-    MODEL: "claude-sonnet-5",
-    // Relatieve URL naar onze eigen Vercel serverless function (server-side proxy).
-    // Die bewaart de Anthropic API key veilig als environment variable — de browser ziet 'm nooit.
-    API_URL: "/api/generate",
-    MAX_TOKENS: 1024,
-    MAX_DEDUPE_RETRIES: 3,
-    MAX_PARSE_RETRIES: 3,
-    STORAGE_KEY_QUESTIONS: "umob_questions"
+    STORAGE_KEY_QUESTIONS: "umob_questions",
+    STORAGE_KEY_USED: "umob_used_pool"
   };
 
   /* ==================== CATEGORIES ==================== */
   const CATEGORIES = [
-    {
-      id: "steden",
-      emoji: "🏙️",
-      label: "Steden & Landen",
-      description: "vragen over waar Umob actief is en welke steden bekend zijn om welk vervoer.",
-      goodUmob: 'In hoeveel landen kun je Umob gebruiken? A) 12+ B) 20+ C) 35+',
-      goodAdjacent: 'Welke Europese hoofdstad heeft de langste metrolijn ter wereld? A) Londen B) Moskou C) Parijs',
-      bad: 'Wat is de hoofdstad van Nederland? (te makkelijk, geen brand-fit)'
-    },
-    {
-      id: "vervoer",
-      emoji: "🛴",
-      label: "Vervoer-type",
-      description: "over verschillende manieren van deelvervoer, hun eigenschappen, kosten, snelheid.",
-      goodUmob: 'Welk vervoer vind je NIET in Umob? A) Deelscooter B) Waterfiets C) Deelauto',
-      goodAdjacent: 'Wat is gemiddeld sneller in de Amsterdamse binnenstad? A) Auto B) E-bike C) Metro',
-      bad: 'Is een fiets ecologisch? (te vaag, geen echt antwoord)'
-    },
-    {
-      id: "slim",
-      emoji: "🧠",
-      label: "Slimme reiziger",
-      description: "kosten/tijd vergelijken, slimste route kiezen, geldbesparen.",
-      goodUmob: 'Rit van 4 km in Amsterdam — wat is meestal het goedkoopst via Umob? A) Deelscooter B) Deelauto C) Taxi',
-      goodAdjacent: 'Op welke afstand is fietsen gemiddeld sneller dan de auto in de stad? A) Onder 2 km B) Onder 5 km C) Onder 10 km',
-      bad: 'Wat is duurzaam reizen? (te algemeen)'
-    },
-    {
-      id: "app",
-      emoji: "📱",
-      label: "Umob-app",
-      description: "features en werking van de app zelf.",
-      goodUmob: 'Hoeveel accounts heb je nodig om alle aanbieders in Umob te gebruiken? A) 1 B) 3 C) Per aanbieder één',
-      goodAdjacent: 'Wat is het grootste voordeel van één mobiliteits-app t.o.v. losse apps per aanbieder? A) Minder accounts nodig B) Altijd korting C) Sneller internet',
-      bad: 'Kun je de app downloaden? (geen echte quiz)'
-    },
-    {
-      id: "weetjes",
-      emoji: "💡",
-      label: "Wist je dat",
-      description: "verrassende weetjes over mobiliteit die goed doen op social.",
-      goodUmob: 'Wist je dat vraag: hoeveel steden wereldwijd biedt Umob inzicht in via de app? A) 100+ B) 260+ C) 500+',
-      goodAdjacent: 'Welke stad had als eerste ter wereld een deelscooter-systeem? A) Los Angeles B) Berlijn C) Santa Monica',
-      bad: 'Wist je dat auto\'s rijden op benzine? (basiskennis)'
-    },
-    {
-      id: "battle",
-      emoji: "⚔️",
-      label: "Battle",
-      description: 'opinion-driven vragen die comments triggeren. Er is geen "fout" antwoord — de host kan zelf een "juist" antwoord kiezen op basis van meerderheidsopinie of grap.',
-      goodUmob: 'Kies één: A) Alleen Umob voor al je ritten B) Los per aanbieder blijven kiezen C) Altijd de goedkoopste optie, ongeacht app',
-      goodAdjacent: 'Wat is erger op de fiets? A) Regen in je gezicht B) Tegenwind C) Rood stoplicht bij elke kruising',
-      bad: 'Wat is beter, auto of fiets? (te simpel, geen twist)',
-      extraInstruction: 'Markeer `correct` als de meest waarschijnlijke meerderheidskeuze, en zet in de `fact` iets als "meningen verdeeld — laat je antwoord in de comments!" zodat het engagement-driver is.'
-    }
+    { id: "steden", emoji: "🏙️", label: "Steden & Landen" },
+    { id: "vervoer", emoji: "🛴", label: "Vervoer-type" },
+    { id: "slim", emoji: "🧠", label: "Slimme reiziger" },
+    { id: "app", emoji: "📱", label: "Umob-app" },
+    { id: "weetjes", emoji: "💡", label: "Wist je dat" },
+    { id: "battle", emoji: "⚔️", label: "Battle" }
   ];
 
-  const SYSTEM_PROMPT = `Je bent een expert social media strateeg gespecialiseerd in viral quiz content voor mobiliteitsmerken. Je schrijft vragen voor Umob — een Nederlandse mobiliteitsapp die alle deelvervoer-aanbieders in één app samenbrengt (20+ landen, 260+ steden, deelscooters/deelfietsen/deelauto's/OV/taxi).
-
-Deze vragen worden gebruikt in TikTok/Reels-video's waar random voorbijgangers een draairad draaien en 3 vragen krijgen. Doel: 2/3 goed = giftcard.
-
-REGELS voor virale vragen:
-- Antwoord moet verrassend zijn ("wait, echt?") of controversieel genoeg om comments te triggeren
-- Geen droge feitjes zonder karakter
-- Multiple choice met 3 opties (A/B/C) waar minstens 2 opties plausibel klinken
-- Geen inside jokes, geen technisch jargon
-- Passen in ~10 seconden voorlezen (vraag + opties)
-- Weetjes-zin na antwoord moet een "oh nice" moment geven voor de host om te zeggen
-
-FORMAT (return exact JSON, geen extra tekst):
-{
-  "question": "de vraagtekst",
-  "options": {"A": "...", "B": "...", "C": "..."},
-  "correct": "A" | "B" | "C",
-  "fact": "korte weetjes-zin die de host na het antwoord kan zeggen (max 20 woorden)",
-  "type": "umob" | "adjacent",
-  "difficulty": "makkelijk" | "middel" | "moeilijk"
-}`;
+  /* ==================== VASTE VRAGENBANK ====================
+     ~96 handmatig samengestelde vragen (16 per categorie, telkens 8 Umob +
+     8 Adjacent, verdeeld over makkelijk/middel/moeilijk). Geen API of
+     internetverbinding nodig — alles draait lokaal in de browser. */
+  const QUESTION_BANK = {
+    steden: [
+      { question: "In hoeveel landen kun je Umob gebruiken?", options: { A: "12+", B: "20+", C: "35+" }, correct: "B", fact: "Umob is actief in 20+ landen wereldwijd.", type: "umob", difficulty: "makkelijk" },
+      { question: "In hoeveel steden is Umob beschikbaar?", options: { A: "100+", B: "150+", C: "260+" }, correct: "C", fact: "Umob dekt 260+ steden — van grote metropolen tot kleinere hubs.", type: "umob", difficulty: "makkelijk" },
+      { question: "Hoeveel Umob-accounts heb je nodig om in 5 verschillende landen te reizen?", options: { A: "5", B: "1", C: "Per stad één" }, correct: "B", fact: "Eén account werkt overal waar Umob actief is.", type: "umob", difficulty: "makkelijk" },
+      { question: "Welke vervoersvorm zit NIET standaard in Umob?", options: { A: "Deelscooter", B: "Onderzeeër", C: "Deelauto" }, correct: "B", fact: "Best gek om te vragen, maar nee — nog geen onderzeeërs in de app.", type: "umob", difficulty: "middel" },
+      { question: "Wat kun je met Umob NIET rechtstreeks vergelijken voordat je boekt?", options: { A: "Prijs", B: "Reistijd", C: "Het weer" }, correct: "C", fact: "Umob laat je prijs én reistijd tussen aanbieders vergelijken — weersvoorspellingen niet.", type: "umob", difficulty: "middel" },
+      { question: "Hoeveel losse apps zou je normaal nodig hebben voor alle aanbieders die in Umob zitten?", options: { A: "2-3", B: "5-6", C: "15+" }, correct: "C", fact: "Umob bundelt tientallen aanbieders in één app.", type: "umob", difficulty: "middel" },
+      { question: "Wat gebeurt er met je betaling als je met Umob van scooter naar taxi wisselt binnen één rit?", options: { A: "Twee keer apart betalen", B: "Eén betaling in de app", C: "Alleen contant" }, correct: "B", fact: "Pay-in-the-app betekent: geen losse afrekenmomenten per aanbieder.", type: "umob", difficulty: "moeilijk" },
+      { question: "Welke van deze drie hoort NIET tussen Umob's aanbieders?", options: { A: "E-bike", B: "OV", C: "Ruimteraket" }, correct: "C", fact: "Nog geen ruimtereizen in Umob — misschien over een paar jaar.", type: "umob", difficulty: "moeilijk" },
+      { question: "Welke stad staat bekend als de fietshoofdstad van de wereld?", options: { A: "Amsterdam", B: "Berlijn", C: "Rome" }, correct: "A", fact: "In Amsterdam staan meer fietsen dan er inwoners zijn.", type: "adjacent", difficulty: "makkelijk" },
+      { question: "Welke metro was de allereerste ter wereld?", options: { A: "Londense Underground", B: "Parijse Métro", C: "New Yorkse Subway" }, correct: "A", fact: "De Underground opende al in 1863 — ruim 160 jaar geleden.", type: "adjacent", difficulty: "makkelijk" },
+      { question: "In welke Italiaanse stad rijden geen auto's, alleen boten?", options: { A: "Milaan", B: "Venetië", C: "Turijn" }, correct: "B", fact: "Venetië heeft simpelweg geen straten breed genoeg voor auto's.", type: "adjacent", difficulty: "middel" },
+      { question: "Welk land staat bekend om het hoogste percentage elektrische auto's op de weg?", options: { A: "Duitsland", B: "Noorwegen", C: "Spanje" }, correct: "B", fact: "In Noorwegen is het merendeel van de nieuwverkopen inmiddels elektrisch.", type: "adjacent", difficulty: "middel" },
+      { question: "Welk Aziatisch treinstation staat in het Guinness Book of Records als drukste ter wereld?", options: { A: "Tokyo Shinjuku", B: "Seoul Station", C: "Bangkok Hua Lamphong" }, correct: "A", fact: "Shinjuku Station verwerkt dagelijks miljoenen reizigers.", type: "adjacent", difficulty: "middel" },
+      { question: "In welke stad werd het allereerste verkeerslicht ter wereld geplaatst (1868)?", options: { A: "New York", B: "Londen", C: "Parijs" }, correct: "B", fact: "Dat eerste verkeerslicht ontplofte binnen een maand — gaslek.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Welke stad voerde als een van de eersten ter wereld een tolheffing in voor auto's in het centrum?", options: { A: "Londen", B: "Berlijn", C: "Madrid" }, correct: "A", fact: "De 'congestion charge' in Londen bestaat sinds 2003.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Welke Aziatische stad heeft zulke strenge regels voor autobezit dat een kenteken duurder kan zijn dan de auto zelf?", options: { A: "Singapore", B: "Tokio", C: "Seoul" }, correct: "A", fact: "In Singapore betaal je eerst voor een 'Certificate of Entitlement' vóór je een auto mag kopen.", type: "adjacent", difficulty: "moeilijk" }
+    ],
+    vervoer: [
+      { question: "Welk vervoer vind je NIET in Umob?", options: { A: "Deelscooter", B: "Waterfiets", C: "Deelauto" }, correct: "B", fact: "Waterfietsen zijn nog geen onderdeel van Umob.", type: "umob", difficulty: "makkelijk" },
+      { question: "Welke van deze drie zit WEL in Umob?", options: { A: "Taxi", B: "Zeppelin", C: "Kabelbaan" }, correct: "A", fact: "Taxi is één van de aanbieders die je via Umob kunt boeken.", type: "umob", difficulty: "makkelijk" },
+      { question: "Hoeveel soorten deelvervoer breng je samen in Umob?", options: { A: "Alleen scooters", B: "Scooters en fietsen", C: "Scooters, fietsen, auto's, taxi, OV en e-bikes" }, correct: "C", fact: "Umob bundelt vrijwel elk deelvervoer-type in één plek.", type: "umob", difficulty: "makkelijk" },
+      { question: "Welk vervoer is meestal het snelst voor een ritje van 2 km binnen de stad?", options: { A: "Deelauto in de spits", B: "Deelscooter", C: "Bus met 4 haltes" }, correct: "B", fact: "Voor korte ritjes wint een scooter vaak van auto's in de file.", type: "umob", difficulty: "middel" },
+      { question: "Wat is meestal duurder per kilometer in de stad?", options: { A: "Deelfiets", B: "Taxi", C: "OV" }, correct: "B", fact: "Taxi's zijn doorgaans de duurste optie per kilometer in de stad.", type: "umob", difficulty: "middel" },
+      { question: "Welk vervoer heeft geen accu of motor nodig?", options: { A: "E-bike", B: "Deelscooter", C: "Deelfiets" }, correct: "C", fact: "Een gewone deelfiets werkt volledig op spierkracht.", type: "umob", difficulty: "middel" },
+      { question: "Welk vervoer kun je meestal NIET gebruiken voor een rit tussen twee steden?", options: { A: "Trein/OV", B: "Deelscooter", C: "Deelauto" }, correct: "B", fact: "Scooters zijn gemaakt voor korte ritten binnen de stad, niet tussen steden.", type: "umob", difficulty: "moeilijk" },
+      { question: "Wat is het grootste voordeel van een e-bike ten opzichte van een gewone deelfiets bij een lange rit?", options: { A: "Hij is lichter", B: "Trapondersteuning, dus minder zweten", C: "Hij is goedkoper" }, correct: "B", fact: "Elektrische trapondersteuning maakt langere of heuvelachtige ritten een stuk makkelijker.", type: "umob", difficulty: "moeilijk" },
+      { question: "Wat is gemiddeld sneller in de binnenstad tijdens de spits?", options: { A: "Auto", B: "E-bike", C: "Bus" }, correct: "B", fact: "Op korte afstanden verslaat een e-bike vaak de auto in de spits.", type: "adjacent", difficulty: "makkelijk" },
+      { question: "Welk land staat bekend als bakermat van de Vespa-scooter?", options: { A: "Frankrijk", B: "Italië", C: "Spanje" }, correct: "B", fact: "De Vespa werd in 1946 in Italië geboren.", type: "adjacent", difficulty: "makkelijk" },
+      { question: "In welke stad werd de eerste grootschalige deelscooter (e-scooter) gelanceerd?", options: { A: "Santa Monica", B: "Berlijn", C: "Tokio" }, correct: "A", fact: "Santa Monica, Californië, was in 2017 het startpunt van de deelscooter-hype.", type: "adjacent", difficulty: "middel" },
+      { question: "Welk vervoermiddel werd rond 2001 uitgevonden door Dean Kamen?", options: { A: "De hoverboard", B: "De Segway", C: "De e-step" }, correct: "B", fact: "De Segway zou het straatbeeld revolutioneren — dat liep anders.", type: "adjacent", difficulty: "middel" },
+      { question: "Wat is een 'tuk-tuk'?", options: { A: "Een soort trein", B: "Een gemotoriseerde riksja", C: "Een elektrische fiets" }, correct: "B", fact: "Tuk-tuks zijn vooral bekend uit Zuidoost-Azië, zoals Bangkok.", type: "adjacent", difficulty: "middel" },
+      { question: "In welke stad ontstond het eerste grootschalige moderne stadsfietsdeelsysteem (Vélib', 2007)?", options: { A: "Amsterdam", B: "Parijs", C: "Kopenhagen" }, correct: "B", fact: "Vélib' in Parijs inspireerde talloze fietsdeelsystemen wereldwijd.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Waar komt het woord 'taxi' oorspronkelijk vandaan?", options: { A: "Van 'taximeter'", B: "Van een Franse chauffeursnaam", C: "Van 'taxfree'" }, correct: "A", fact: "'Taxi' is een verkorting van taximeter — het apparaat dat de rit meet.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Wat is het belangrijkste kenmerk van 'MaaS' (Mobility as a Service)?", options: { A: "Gratis OV voor iedereen", B: "Alle vervoer combineren in één app", C: "Alleen elektrisch vervoer" }, correct: "B", fact: "MaaS draait om vervoer combineren zonder los per aanbieder te hoeven regelen — precies waar Umob op inspeelt.", type: "adjacent", difficulty: "moeilijk" }
+    ],
+    slim: [
+      { question: "Rit van 4 km in de stad — wat is meestal het goedkoopst via Umob?", options: { A: "Deelscooter", B: "Deelauto", C: "Taxi" }, correct: "A", fact: "Voor korte ritjes is een scooter meestal de goedkoopste keuze.", type: "umob", difficulty: "makkelijk" },
+      { question: "Wat helpt je in Umob om de goedkoopste optie te vinden?", options: { A: "Een prijsvergelijking tussen aanbieders", B: "Gokken", C: "Altijd voor de auto kiezen" }, correct: "A", fact: "Umob laat je prijzen tussen aanbieders direct naast elkaar zien.", type: "umob", difficulty: "makkelijk" },
+      { question: "Wat bespaar je vooral door via Umob te boeken in plaats van losse apps?", options: { A: "Tijd door te vergelijken in één app", B: "Niks, overal hetzelfde", C: "Alleen data-verbruik" }, correct: "A", fact: "Eén app vergelijken is sneller dan tussen losse apps schakelen.", type: "umob", difficulty: "makkelijk" },
+      { question: "Rit van 8 km buiten de spits, geen haast — wat is vaak het slimst?", options: { A: "Taxi", B: "OV of deelfiets", C: "Deelscooter over de snelweg" }, correct: "B", fact: "Zonder haast is OV of fietsen vaak zowel goedkoper als net zo snel.", type: "umob", difficulty: "middel" },
+      { question: "Je hebt precies 10 minuten om een afspraak te halen, 1,5 km verderop — wat kies je?", options: { A: "Deelauto zoeken en parkeren", B: "Lopen", C: "Deelscooter of e-bike" }, correct: "C", fact: "Voor korte afstanden onder tijdsdruk wint een scooter het bijna altijd van autozoeken en parkeren.", type: "umob", difficulty: "middel" },
+      { question: "Wat is het grootste risico als je blind voor de duurste optie kiest zonder te vergelijken?", options: { A: "Je betaalt onnodig meer", B: "Je komt sneller aan", C: "Je krijgt korting" }, correct: "A", fact: "Vergelijken in Umob voorkomt dat je onnodig teveel betaalt.", type: "umob", difficulty: "middel" },
+      { question: "Bij een rit van 15 km met bagage — wat is meestal de slimste combinatie?", options: { A: "Lopen", B: "Deelauto of taxi", C: "Scooter met een tas op je rug" }, correct: "B", fact: "Bij afstand plus bagage wint comfort vaak van de goedkoopste losse optie.", type: "umob", difficulty: "moeilijk" },
+      { question: "Wanneer is het slim om vlak vóór vertrek nog even in Umob te vergelijken?", options: { A: "Nooit, prijzen zijn altijd hetzelfde", B: "Bij spits/drukte, prijs en beschikbaarheid wisselen", C: "Alleen in het weekend" }, correct: "B", fact: "Beschikbaarheid en prijs kunnen door de dag heen verschuiven, vooral in de spits.", type: "umob", difficulty: "moeilijk" },
+      { question: "Op welke afstand is fietsen gemiddeld sneller dan de auto in de stad?", options: { A: "Onder 2 km", B: "Onder 5 km", C: "Onder 10 km" }, correct: "B", fact: "Tot zo'n 5 km is de fiets in de stad vaak sneller door files en parkeren.", type: "adjacent", difficulty: "makkelijk" },
+      { question: "Wat kost je in de stad vaak meer tijd dan de rit zelf?", options: { A: "Instappen", B: "Een parkeerplek zoeken", C: "Betalen" }, correct: "B", fact: "Parkeren zoeken kan in drukke steden langer duren dan de rit zelf.", type: "adjacent", difficulty: "makkelijk" },
+      { question: "Wat is meestal de goedkoopste manier om 20 km buiten de spits af te leggen?", options: { A: "Taxi", B: "Trein/OV", C: "Deelauto alleen" }, correct: "B", fact: "Over langere afstanden is OV vaak de goedkoopste optie per kilometer.", type: "adjacent", difficulty: "middel" },
+      { question: "Wat bespaart gemiddeld het meeste geld op jaarbasis in de stad?", options: { A: "Een eigen auto", B: "Combinatie van fiets, OV en af en toe deelvervoer", C: "Elke dag taxi" }, correct: "B", fact: "Een eigen auto kost inclusief verzekering, parkeren en onderhoud al snel duizenden euro's per jaar.", type: "adjacent", difficulty: "middel" },
+      { question: "Wat is de snelste manier om tijdens de spits een korte afstand af te leggen in een drukke binnenstad?", options: { A: "Auto", B: "Fiets of scooter", C: "Bus" }, correct: "B", fact: "In de spits staat autoverkeer vaak stil, terwijl fietsers en scooters gewoon doorrijden.", type: "adjacent", difficulty: "middel" },
+      { question: "Wat is doorgaans de duurste fout die reizigers maken?", options: { A: "Te vroeg vertrekken", B: "Nooit vergelijken, altijd dezelfde optie kiezen", C: "Te veel lopen" }, correct: "B", fact: "Wie nooit vergelijkt, betaalt structureel meer dan nodig.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Bij regen en een korte afstand — wat is meestal het slimst?", options: { A: "Deelfiets zonder overkapping", B: "OV of een overdekte optie", C: "Lopen" }, correct: "B", fact: "Bij slecht weer is droog en overdekt reizen vaak de betere keuze, ook als het iets meer kost.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Waarom is 'de goedkoopste optie' niet altijd 'de slimste keuze'?", options: { A: "Omdat prijs nooit varieert", B: "Omdat tijd en gemak ook meetellen", C: "Omdat het altijd hetzelfde is" }, correct: "B", fact: "Slim reizen is een afweging tussen prijs, tijd én gemak — niet alleen de laagste prijs.", type: "adjacent", difficulty: "moeilijk" }
+    ],
+    app: [
+      { question: "Hoeveel accounts heb je nodig om alle aanbieders in Umob te gebruiken?", options: { A: "1", B: "3", C: "Per aanbieder één" }, correct: "A", fact: "Eén Umob-account is genoeg voor alle aangesloten aanbieders.", type: "umob", difficulty: "makkelijk" },
+      { question: "Hoe betaal je een rit die je via Umob boekt?", options: { A: "Los per aanbieder", B: "Rechtstreeks in de Umob-app", C: "Altijd contant" }, correct: "B", fact: "Pay-in-the-app: alles verloopt via de app zelf, geen losse betalingen.", type: "umob", difficulty: "makkelijk" },
+      { question: "Wat kun je in de Umob-app doen vóórdat je een rit boekt?", options: { A: "Prijzen en reistijd vergelijken", B: "Niets, je moet gewoon boeken", C: "Alleen de aanbieder kiezen op naam" }, correct: "A", fact: "Umob toont vooraf prijs én reistijd van verschillende aanbieders naast elkaar.", type: "umob", difficulty: "makkelijk" },
+      { question: "Wat gebeurt er als je in Umob van aanbieder wisselt tijdens het plannen van je reis?", options: { A: "Je moet een nieuwe app openen", B: "Je blijft in dezelfde app", C: "Je account wordt geblokkeerd" }, correct: "B", fact: "Wisselen tussen aanbieders gebeurt allemaal binnen dezelfde Umob-app.", type: "umob", difficulty: "middel" },
+      { question: "Wat is het belangrijkste voordeel van Umob boven losse aanbieder-apps?", options: { A: "Meer advertenties", B: "Eén overzicht in plaats van tientallen apps", C: "Gratis ritten" }, correct: "B", fact: "In plaats van tientallen losse apps heb je met Umob één overzicht.", type: "umob", difficulty: "middel" },
+      { question: "In hoeveel landen werkt jouw ene Umob-account?", options: { A: "Alleen je eigen land", B: "In alle landen waar Umob actief is", C: "Maximaal 3 landen" }, correct: "B", fact: "Je Umob-account werkt in elk land waar de app actief is — 20+ op dit moment.", type: "umob", difficulty: "middel" },
+      { question: "Wat vergelijkt Umob precies naast elkaar voor jouw rit?", options: { A: "Alleen de prijs", B: "Alleen de reistijd", C: "Zowel prijs als reistijd" }, correct: "C", fact: "Umob toont prijs én reistijd samen, zodat je een weloverwogen keuze maakt.", type: "umob", difficulty: "moeilijk" },
+      { question: "Waarom hoef je met Umob nooit apart af te rekenen per aanbieder?", options: { A: "Omdat alles gratis is", B: "Omdat betalen centraal in de app geregeld is", C: "Omdat je altijd contant betaalt" }, correct: "B", fact: "Alle betalingen lopen gecentraliseerd via de app, ongeacht welke aanbieder je kiest.", type: "umob", difficulty: "moeilijk" },
+      { question: "Wat is het grootste voordeel van één mobiliteits-app t.o.v. losse apps per aanbieder?", options: { A: "Minder accounts nodig", B: "Altijd korting", C: "Sneller internet" }, correct: "A", fact: "Eén app betekent één account in plaats van tientallen losse inlogs.", type: "adjacent", difficulty: "makkelijk" },
+      { question: "Wat is de belangrijkste reden dat mensen liever één reis-app gebruiken dan tien losse?", options: { A: "Overzicht en gemak", B: "Het is verplicht", C: "Het is altijd goedkoper" }, correct: "A", fact: "Overzicht en gemak zijn de belangrijkste redenen om apps te bundelen.", type: "adjacent", difficulty: "makkelijk" },
+      { question: "Hoe heet het concept waarbij je al je vervoer combineert in één dienst/app?", options: { A: "MaaS (Mobility as a Service)", B: "IoT", C: "SaaS" }, correct: "A", fact: "MaaS staat voor Mobility as a Service — alle vervoer in één plek.", type: "adjacent", difficulty: "middel" },
+      { question: "Wat is een veelgenoemd nadeel van tien losse vervoer-apps naast elkaar?", options: { A: "Te weinig functies", B: "Steeds opnieuw inloggen en betaalgegevens invoeren", C: "Te veel korting" }, correct: "B", fact: "Bij losse apps moet je telkens opnieuw inloggen en gegevens invoeren — tijdverlies.", type: "adjacent", difficulty: "middel" },
+      { question: "Waarom groeit de populariteit van 'super-apps' voor mobiliteit wereldwijd?", options: { A: "Mensen willen minder apps beheren", B: "Ze zijn verplicht", C: "Ze zijn altijd gratis" }, correct: "A", fact: "Minder apps beheren en alles centraal regelen spreekt steeds meer reizigers aan.", type: "adjacent", difficulty: "middel" },
+      { question: "Wat is meestal het grootste obstakel om over te stappen naar deelvervoer i.p.v. een eigen auto?", options: { A: "Gebrek aan overzicht/vertrouwen in beschikbaarheid", B: "Te weinig kleuropties", C: "Te snel" }, correct: "A", fact: "Onzekerheid over beschikbaarheid en overzicht weerhoudt mensen vaker dan prijs.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Wat betekent 'first-mile/last-mile' in mobiliteit?", options: { A: "Het eerste/laatste stukje van een reis, vaak licht vervoer", B: "De langste afstand van een reis", C: "Een soort korting" }, correct: "A", fact: "First-mile/last-mile gaat over dat stukje van huis naar OV-halte of andersom — vaak ideaal voor scooter of fiets.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Wat is het belangrijkste doel van prijs- en tijdvergelijking in een reis-app?", options: { A: "Reclame tonen", B: "Je helpen de beste keuze te maken per situatie", C: "Data verzamelen" }, correct: "B", fact: "Vergelijken bestaat om jou, per situatie, de beste keuze te laten maken.", type: "adjacent", difficulty: "moeilijk" }
+    ],
+    weetjes: [
+      { question: "In hoeveel steden wereldwijd geeft Umob je toegang tot vervoer?", options: { A: "100+", B: "260+", C: "500+" }, correct: "B", fact: "Umob is actief in 260+ steden wereldwijd.", type: "umob", difficulty: "makkelijk" },
+      { question: "In hoeveel landen kun je met je Umob-account reizen?", options: { A: "5+", B: "20+", C: "50+" }, correct: "B", fact: "20+ landen — en dat groeit nog steeds.", type: "umob", difficulty: "makkelijk" },
+      { question: "Wat hoef je met Umob nooit meer te doen?", options: { A: "Los per aanbieder afrekenen", B: "Lopen", C: "Gratis reizen" }, correct: "A", fact: "Alles verloopt via één betaling, in één app.", type: "umob", difficulty: "makkelijk" },
+      { question: "Waarbij helpt Umob je vooral te kiezen?", options: { A: "Alleen de kleur van de scooter", B: "Prijs en reistijd van verschillende aanbieders", C: "Het merk van de auto" }, correct: "B", fact: "Umob zet prijs en reistijd naast elkaar zodat jij slim kunt kiezen.", type: "umob", difficulty: "middel" },
+      { question: "Hoeveel losse apps bespaar je door Umob te gebruiken in plaats van elke aanbieder apart?", options: { A: "Geen enkele", B: "Tientallen", C: "Precies twee" }, correct: "B", fact: "In plaats van tientallen losse apps: alles in Umob.", type: "umob", difficulty: "middel" },
+      { question: "Welke vervoerstypes vind je allemaal terug in Umob?", options: { A: "Alleen fietsen", B: "Scooters, fietsen, auto's, taxi, OV en e-bikes", C: "Alleen taxi's" }, correct: "B", fact: "Bijna elk deelvervoer-type zit gebundeld in Umob.", type: "umob", difficulty: "middel" },
+      { question: "Wanneer blijft je Umob-account gewoon werken?", options: { A: "Als je naar een ander land reist waar Umob actief is", B: "Alleen na een app-update", C: "Alleen met een nieuwe simkaart" }, correct: "A", fact: "Eén account, geldig in elk land waar Umob draait.", type: "umob", difficulty: "moeilijk" },
+      { question: "Wat is het hoofddoel van Umob?", options: { A: "Zoveel mogelijk losse apps maken", B: "Alle deelvervoer-aanbieders bundelen in één plek", C: "Alleen taxi's goedkoper maken" }, correct: "B", fact: "Umob bestaat om versnipperd deelvervoer weer overzichtelijk te maken.", type: "umob", difficulty: "moeilijk" },
+      { question: "Welke stad had als eerste ter wereld een grootschalig deelscooter-systeem?", options: { A: "Los Angeles", B: "Berlijn", C: "Santa Monica" }, correct: "C", fact: "Santa Monica, 2017 — het startpunt van de wereldwijde scooter-hype.", type: "adjacent", difficulty: "makkelijk" },
+      { question: "Wat is bijzonder aan Amsterdam qua fietsen?", options: { A: "Er zijn meer fietsen dan inwoners", B: "Er zijn meer auto's dan fietsen", C: "Er zijn meer bussen dan taxi's" }, correct: "A", fact: "Amsterdam telt letterlijk meer fietsen dan mensen.", type: "adjacent", difficulty: "makkelijk" },
+      { question: "Wat heeft Venetië helemaal niet?", options: { A: "Bruggen", B: "Auto's", C: "Boten" }, correct: "B", fact: "In Venetië verplaats je je alleen te voet of over water.", type: "adjacent", difficulty: "middel" },
+      { question: "Waar komt het woord 'taxi' oorspronkelijk vandaan?", options: { A: "Taxfree", B: "Taximeter", C: "Taxatie" }, correct: "B", fact: "'Taxi' komt van taximeter, het apparaat dat de ritprijs meet.", type: "adjacent", difficulty: "middel" },
+      { question: "Waar stond het allereerste verkeerslicht ter wereld (1868)?", options: { A: "New York", B: "Londen", C: "Parijs" }, correct: "B", fact: "Dat allereerste verkeerslicht in Londen ontplofte binnen een maand door een gaslek.", type: "adjacent", difficulty: "middel" },
+      { question: "Waar en wanneer werd de Vespa-scooter uitgevonden?", options: { A: "1946, Italië", B: "1962, Frankrijk", C: "1978, Spanje" }, correct: "A", fact: "Na de Tweede Wereldoorlog werd de Vespa razendsnel populair in heel Europa.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Waarom zijn auto's in Singapore zo duur?", options: { A: "Om een parkeerplek te reserveren", B: "Je moet eerst een 'Certificate of Entitlement' kopen", C: "Om een rijbewijs B-plus te halen" }, correct: "B", fact: "Dat certificaat alleen al kan tienduizenden euro's kosten, nog vóór je de auto zelf betaalt.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Wanneer opende de Londense Underground, 's werelds oudste metro?", options: { A: "1863", B: "1901", C: "1922" }, correct: "A", fact: "De Underground is de oudste metro ter wereld — ouder dan de auto zelf.", type: "adjacent", difficulty: "moeilijk" }
+    ],
+    battle: [
+      { question: "Kies één: hoe reis jij het liefst door de stad?", options: { A: "Alleen Umob voor al je ritten", B: "Los per aanbieder blijven kiezen", C: "Altijd de goedkoopste optie, ongeacht app" }, correct: "A", fact: "Meningen verdeeld — laat je antwoord in de comments!", type: "umob", difficulty: "makkelijk" },
+      { question: "Wat is erger?", options: { A: "Tien losse vervoer-apps op je telefoon", B: "Eén rit missen door verkeerde app", C: "Je account kwijtraken" }, correct: "A", fact: "De meesten kiezen voor minder apps — eens of oneens?", type: "umob", difficulty: "makkelijk" },
+      { question: "Kies je reisstijl: altijd vergelijken of altijd blind boeken?", options: { A: "Altijd vergelijken voor je boekt", B: "Altijd de eerste optie pakken", C: "Altijd de duurste, voor het comfort" }, correct: "A", fact: "Vergelijken wint meestal — maar niet iedereen heeft daar tijd voor!", type: "umob", difficulty: "makkelijk" },
+      { question: "Wat is irritanter?", options: { A: "Wisselen tussen tien apps voor je vervoer", B: "Wachten op een scooter die net weg is", C: "Een rit die 2 minuten vertraagd is" }, correct: "A", fact: "Appjes wisselen scoort hoog als grootste ergernis — herkenbaar?", type: "umob", difficulty: "middel" },
+      { question: "Kies: gemak of geld besparen?", options: { A: "Eén app voor alles, ook al iets duurder", B: "Los shoppen voor de beste deal, ook al kost dat tijd", C: "Maakt niet uit" }, correct: "A", fact: "Gemak vs. geld — waar sta jij?", type: "umob", difficulty: "middel" },
+      { question: "Wat zou je nooit meer willen?", options: { A: "Terug naar losse vervoer-apps", B: "Terug naar contant betalen voor een rit", C: "Terug naar papieren OV-kaartjes" }, correct: "A", fact: "Losse apps staan bovenaan de 'nooit meer'-lijst — of niet?", type: "umob", difficulty: "middel" },
+      { question: "Kies één: overzicht houden of zelf speurwerk doen?", options: { A: "Eén overzicht van alle vervoer, altijd", B: "Zelf altijd shoppen voor de beste prijs", C: "Maakt niet uit" }, correct: "A", fact: "Gemak wint van speurwerk bij de meeste mensen — jij ook?", type: "umob", difficulty: "moeilijk" },
+      { question: "Wat is de grootste tijdverspiller in vervoer?", options: { A: "Schakelen tussen losse apps en accounts", B: "Wachten op een rit", C: "Een omweg door de navigatie" }, correct: "A", fact: "Schakelen tussen apps kost vaak meer tijd dan de rit zelf!", type: "umob", difficulty: "moeilijk" },
+      { question: "Wat is erger op de fiets?", options: { A: "Regen in je gezicht", B: "Tegenwind", C: "Rood stoplicht bij elke kruising" }, correct: "C", fact: "Meningen verdeeld — laat je antwoord in de comments!", type: "adjacent", difficulty: "makkelijk" },
+      { question: "Kies één: welk vervoer mis je het minst?", options: { A: "Nooit meer OV", B: "Nooit meer auto", C: "Nooit meer fiets" }, correct: "B", fact: "Dit splitst elke groep — wat zou jij nooit meer willen?", type: "adjacent", difficulty: "makkelijk" },
+      { question: "Wat is erger in de spits?", options: { A: "Vast staan in de auto", B: "Een overvolle trein", C: "Regen op de fiets" }, correct: "A", fact: "Bijna iedereen haat vast staan — of vind jij de volle trein erger?", type: "adjacent", difficulty: "middel" },
+      { question: "Kies: wat is de grootste ergernis onderweg?", options: { A: "Altijd een parkeerplek zoeken", B: "Altijd wachten op de bus", C: "Altijd een lege deelscooter treffen" }, correct: "A", fact: "Parkeren zoeken wint de irritatie-award — akkoord?", type: "adjacent", difficulty: "middel" },
+      { question: "Wat is stommer om te doen?", options: { A: "Met de auto 500 meter rijden", B: "Een deelscooter pakken voor 5 minuten lopen", C: "Een taxi bestellen voor de hoek van de straat" }, correct: "A", fact: "500 meter met de auto is voor de meesten not done — of doe jij dat stiekem wel?", type: "adjacent", difficulty: "middel" },
+      { question: "Kies één: welk verkeersleed haat jij het meest?", options: { A: "Voor altijd vastzitten in de spits", B: "Voor altijd wachten op vertraagde treinen", C: "Voor altijd geen parkeerplek vinden" }, correct: "A", fact: "Geen enkele optie is leuk — welke haat jij het meest?", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Wat is erger als reiziger?", options: { A: "Een rit die niet komt opdagen", B: "Een rit die veel te duur blijkt", C: "Een rit die de verkeerde kant op rijdt" }, correct: "A", fact: "Niet komen opdagen scoort het hoogst op de ergernis-schaal — eens?", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Kies: hoe zou jij de hele stad willen doorkruisen?", options: { A: "De hele stad alleen te voet", B: "De hele stad alleen met de auto", C: "De hele stad alleen met OV" }, correct: "C", fact: "De meningen liggen hier flink uit elkaar — wat kies jij?", type: "adjacent", difficulty: "moeilijk" }
+    ]
+  };
 
   /* ==================== STATE ==================== */
   let currentCategoryId = null;
   let currentQuestion = null;
-  let rateLimitTimer = null;
 
   /* ==================== STORAGE HELPERS ==================== */
   function getHistory() {
@@ -692,118 +665,69 @@ FORMAT (return exact JSON, geen extra tekst):
     list.push(record);
     saveHistory(list);
   }
-  function isDuplicateHash(hash) {
-    return getHistory().some(function (q) { return q.hash === hash; });
-  }
 
-  /* ==================== HASHING ==================== */
-  async function sha1(text) {
-    const enc = new TextEncoder().encode(text);
-    const buf = await crypto.subtle.digest("SHA-1", enc);
-    return Array.from(new Uint8Array(buf)).map(function (b) {
-      return b.toString(16).padStart(2, "0");
-    }).join("");
+  function getUsedPool() {
+    try {
+      const raw = localStorage.getItem(CONFIG.STORAGE_KEY_USED);
+      return raw ? JSON.parse(raw) : {};
+    } catch (e) {
+      return {};
+    }
+  }
+  function saveUsedPool(pool) {
+    localStorage.setItem(CONFIG.STORAGE_KEY_USED, JSON.stringify(pool));
+  }
+  function markUsed(categoryId, questionText) {
+    const pool = getUsedPool();
+    if (!pool[categoryId]) pool[categoryId] = [];
+    pool[categoryId].push(questionText);
+    saveUsedPool(pool);
+  }
+  function resetUsed(categoryId) {
+    const pool = getUsedPool();
+    pool[categoryId] = [];
+    saveUsedPool(pool);
   }
 
   /* ==================== RANDOM HELPERS ==================== */
   function pickType() {
     return Math.random() < 0.5 ? "umob" : "adjacent";
   }
-  function pickDifficulty() {
-    const r = Math.random();
-    if (r < 0.4) return "makkelijk";
-    if (r < 0.8) return "middel";
-    return "moeilijk";
-  }
   function pickRandomCategory() {
     return CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
   }
 
-  /* ==================== PROMPT BUILDING ==================== */
-  function buildUserMessage(category, type, difficulty, strict) {
-    const typeLabel = type === "umob" ? "Umob-specifiek" : "Adjacent (mobiliteit/reizen algemeen, niet direct Umob)";
-    let msg = "Categorie: " + category.emoji + " " + category.label + "\n";
-    msg += "Doel van deze categorie: " + category.description + "\n";
-    if (category.goodUmob) msg += "Goed voorbeeld (Umob-type): " + category.goodUmob + "\n";
-    if (category.goodAdjacent) msg += "Goed voorbeeld (Adjacent-type): " + category.goodAdjacent + "\n";
-    msg += "Slecht voorbeeld (vermijd dit soort vragen): " + category.bad + "\n";
-    if (category.extraInstruction) msg += category.extraInstruction + "\n";
-    msg += "\nGenereer een vraag van dit type: " + typeLabel + ".\n";
-    msg += "Gebruik deze moeilijkheidsgraad: " + difficulty + ".\n";
-    msg += '\nGenereer nu ÉÉN nieuwe vraag in dit format. Alleen JSON.';
-    if (strict) {
-      msg += "\n\nBELANGRIJK: Antwoord ALLEEN met geldige, parsbare JSON. Geen markdown code fences (```), geen uitleg, geen tekst voor of na de JSON.";
-    }
-    return msg;
-  }
+  /* ==================== SELECTIE UIT DE VRAGENBANK ====================
+     Rolt eerst 50/50 Umob vs Adjacent, pakt dan een nog-niet-getoonde vraag
+     uit die pool. Is die pool op, dan wordt de andere type-pool geprobeerd;
+     is de hele categorie op, dan begint de cyclus opnieuw (reset). */
+  function pickQuestion(categoryId) {
+    const all = QUESTION_BANK[categoryId] || [];
+    const used = getUsedPool()[categoryId] || [];
+    const type = pickType();
 
-  /* ==================== API CALL ==================== */
-  async function callClaudeAPI(userMessage) {
-    // Roept onze eigen /api/generate serverless function aan (server-side proxy).
-    // De Anthropic API key blijft server-side (Vercel environment variable) — nooit in de browser.
-    let res;
-    try {
-      res = await fetch(CONFIG.API_URL, {
-        method: "POST",
-        headers: {
-          "content-type": "application/json"
-        },
-        body: JSON.stringify({
-          model: CONFIG.MODEL,
-          max_tokens: CONFIG.MAX_TOKENS,
-          system: SYSTEM_PROMPT,
-          messages: [{ role: "user", content: userMessage }]
-        })
-      });
-    } catch (networkErr) {
-      const err = new Error("network");
-      err.type = "network";
-      throw err;
+    function unused(list) {
+      return list.filter(function (q) { return used.indexOf(q.question) === -1; });
     }
 
-    if (!res.ok) {
-      if (res.status === 429) {
-        const retryAfterHeader = res.headers.get("retry-after");
-        const err = new Error("rate_limit");
-        err.type = "rate_limit";
-        err.retryAfter = retryAfterHeader ? parseInt(retryAfterHeader, 10) : 30;
-        throw err;
-      }
-      let message = "HTTP " + res.status;
-      try {
-        const body = await res.json();
-        if (body && body.error && body.error.message) message = body.error.message;
-      } catch (e) { /* ignore */ }
-      const err = new Error(message);
-      err.type = res.status >= 500 ? "server" : "client";
-      err.status = res.status;
-      throw err;
+    let candidates = unused(all.filter(function (q) { return q.type === type; }));
+    if (candidates.length === 0) {
+      candidates = unused(all);
+    }
+    if (candidates.length === 0) {
+      resetUsed(categoryId);
+      candidates = all;
     }
 
-    const data = await res.json();
-    const text = (data.content && data.content[0] && data.content[0].text) || "";
-    return text;
+    const chosen = candidates[Math.floor(Math.random() * candidates.length)];
+    markUsed(categoryId, chosen.question);
+    return chosen;
   }
 
-  function extractJSON(text) {
-    let t = text.trim();
-    t = t.replace(/^```json\s*/i, "").replace(/^```\s*/, "").replace(/```\s*$/, "");
-    return JSON.parse(t);
-  }
-
-  function validateQuestionObject(obj) {
-    if (!obj || typeof obj !== "object") throw new Error("invalid");
-    if (typeof obj.question !== "string" || !obj.question.trim()) throw new Error("invalid");
-    if (!obj.options || typeof obj.options !== "object") throw new Error("invalid");
-    if (!["A", "B", "C"].every(function (k) { return typeof obj.options[k] === "string" && obj.options[k].trim(); })) {
-      throw new Error("invalid");
-    }
-    if (!["A", "B", "C"].includes(obj.correct)) throw new Error("invalid");
-    if (typeof obj.fact !== "string" || !obj.fact.trim()) throw new Error("invalid");
-    return true;
-  }
-
-  /* ==================== GENERATION FLOW ==================== */
+  /* ==================== GENERATION FLOW ====================
+     Geen API meer nodig — een vraag "genereren" betekent hier: een nog niet
+     getoonde vraag uit de lokale vragenbank kiezen. De korte timeout geeft
+     de loader een moment om te tonen, wat bij het "draaien" hoort. */
   function generateQuestion(categoryId) {
     const category = CATEGORIES.find(function (c) { return c.id === categoryId; });
     if (!category) return;
@@ -812,91 +736,24 @@ FORMAT (return exact JSON, geen extra tekst):
     openQuestionModal();
     renderLoading();
 
-    const type = pickType();
-    const difficulty = pickDifficulty();
-    runGeneration(category, type, difficulty, 0, 0);
-  }
-
-  function runGeneration(category, type, difficulty, dedupeAttempt, parseAttempt) {
-    const strict = parseAttempt > 0;
-    const userMsg = buildUserMessage(category, type, difficulty, strict);
-
-    callClaudeAPI(userMsg).then(function (text) {
-      let obj;
-      try {
-        obj = extractJSON(text);
-        validateQuestionObject(obj);
-      } catch (parseErr) {
-        if (parseAttempt < CONFIG.MAX_PARSE_RETRIES - 1) {
-          runGeneration(category, type, difficulty, dedupeAttempt, parseAttempt + 1);
-        } else {
-          renderError(
-            "Kon geen geldige vraag genereren (JSON-fout). Probeer het opnieuw.",
-            function () { renderLoading(); runGeneration(category, type, difficulty, 0, 0); }
-          );
-        }
-        return;
-      }
-
-      sha1(obj.question.trim().toLowerCase()).then(function (hash) {
-        if (isDuplicateHash(hash) && dedupeAttempt < CONFIG.MAX_DEDUPE_RETRIES - 1) {
-          runGeneration(category, type, difficulty, dedupeAttempt + 1, 0);
-          return;
-        }
-
-        const record = {
-          question: obj.question,
-          options: obj.options,
-          correct: obj.correct,
-          fact: obj.fact,
-          type: type,
-          difficulty: difficulty,
-          category: category.id,
-          categoryLabel: category.label,
-          categoryEmoji: category.emoji,
-          hash: hash,
-          createdAt: Date.now()
-        };
-        addToHistory(record);
-        currentQuestion = record;
-        renderQuestion(record);
-      });
-    }).catch(function (err) {
-      handleGenerationError(err, function () {
-        renderLoading();
-        runGeneration(category, type, difficulty, dedupeAttempt, parseAttempt);
-      });
-    });
-  }
-
-  function handleGenerationError(err, retryFn) {
-    if (rateLimitTimer) { clearInterval(rateLimitTimer); rateLimitTimer = null; }
-
-    if (err.type === "rate_limit") {
-      let remaining = err.retryAfter || 30;
-      renderRateLimitError(remaining, retryFn);
-      rateLimitTimer = setInterval(function () {
-        remaining -= 1;
-        updateRateLimitCountdown(remaining, retryFn);
-        if (remaining <= 0) {
-          clearInterval(rateLimitTimer);
-          rateLimitTimer = null;
-        }
-      }, 1000);
-      return;
-    }
-
-    if (err.type === "network") {
-      renderError("Geen internet, probeer opnieuw.", retryFn);
-      return;
-    }
-
-    if (err.type === "server") {
-      renderError("Er ging iets mis bij het genereren (serverfout). Probeer opnieuw.", retryFn);
-      return;
-    }
-
-    renderError("API-fout: " + (err.message || "onbekende fout") + ". Controleer je API key of probeer opnieuw.", retryFn);
+    setTimeout(function () {
+      const picked = pickQuestion(categoryId);
+      const record = {
+        question: picked.question,
+        options: picked.options,
+        correct: picked.correct,
+        fact: picked.fact,
+        type: picked.type,
+        difficulty: picked.difficulty,
+        category: category.id,
+        categoryLabel: category.label,
+        categoryEmoji: category.emoji,
+        createdAt: Date.now()
+      };
+      addToHistory(record);
+      currentQuestion = record;
+      renderQuestion(record);
+    }, 400);
   }
 
   /* ==================== MODAL: QUESTION ==================== */
@@ -908,7 +765,6 @@ FORMAT (return exact JSON, geen extra tekst):
   }
   function closeQuestionModal() {
     questionOverlay.classList.remove("open");
-    if (rateLimitTimer) { clearInterval(rateLimitTimer); rateLimitTimer = null; }
   }
   document.getElementById("question-close").addEventListener("click", closeQuestionModal);
   // Backdrop click and Escape intentionally do nothing — modal only closes via the X button.
@@ -917,35 +773,8 @@ FORMAT (return exact JSON, geen extra tekst):
     questionBody.innerHTML =
       '<div class="loading-box">' +
       '<div class="spinner" aria-hidden="true"></div>' +
-      '<p>Vraag wordt gemaakt...</p>' +
+      '<p>Vraag wordt gekozen...</p>' +
       '</div>';
-  }
-
-  function renderError(message, retryFn) {
-    questionBody.innerHTML =
-      '<div class="error-box">' +
-      '<div class="error-icon">⚠️</div>' +
-      '<p>' + escapeHTML(message) + '</p>' +
-      '<button class="btn-retry" type="button" id="error-retry-btn">Probeer opnieuw</button>' +
-      '</div>';
-    document.getElementById("error-retry-btn").addEventListener("click", retryFn);
-  }
-
-  function renderRateLimitError(seconds, retryFn) {
-    questionBody.innerHTML =
-      '<div class="error-box">' +
-      '<div class="error-icon">⏳</div>' +
-      '<p>Te snel gegenereerd, wacht ' + '<span id="rl-seconds">' + seconds + '</span>' + ' seconden</p>' +
-      '<button class="btn-retry" type="button" id="error-retry-btn" disabled>Probeer opnieuw</button>' +
-      '</div>';
-    document.getElementById("error-retry-btn").addEventListener("click", retryFn);
-  }
-
-  function updateRateLimitCountdown(seconds, retryFn) {
-    const secEl = document.getElementById("rl-seconds");
-    const btn = document.getElementById("error-retry-btn");
-    if (secEl) secEl.textContent = Math.max(seconds, 0);
-    if (btn && seconds <= 0) btn.disabled = false;
   }
 
   function renderQuestion(q) {
@@ -1007,11 +836,7 @@ FORMAT (return exact JSON, geen extra tekst):
     });
 
     document.getElementById("again-btn").addEventListener("click", function () {
-      renderLoading();
-      const category = CATEGORIES.find(function (c) { return c.id === q.category; });
-      const type = pickType();
-      const difficulty = pickDifficulty();
-      runGeneration(category, type, difficulty, 0, 0);
+      generateQuestion(q.category);
     });
   }
 
