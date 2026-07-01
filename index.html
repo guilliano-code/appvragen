@@ -1,0 +1,1245 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Umob Vragen Generator</title>
+<style>
+  :root {
+    --bg-start: #0B0C10;
+    --bg-end: #17191F;
+    --accent: #DAFC5A;
+    --accent-ink: #12140C;
+    --purple: #DAFC5A;
+    --teal: #6FE7D6;
+    --green: #4ADE80;
+    --orange: #FBBF24;
+    --red: #FB7185;
+    --ink: #F3F4F1;
+    --muted: #9AA0AC;
+    --card-bg: #1B1D24;
+    --card-bg-alt: #23252E;
+    --border-subtle: rgba(255, 255, 255, 0.08);
+    --radius-lg: 24px;
+    --radius-md: 16px;
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    min-height: 100%;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 16px;
+    color: var(--ink);
+    background: linear-gradient(160deg, var(--bg-start) 0%, var(--bg-end) 100%);
+    background-attachment: fixed;
+    min-height: 100vh;
+    padding-bottom: calc(24px + var(--safe-bottom));
+  }
+
+  button {
+    font-family: inherit;
+    cursor: pointer;
+    border: none;
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  select:focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .container {
+    max-width: 640px;
+    margin: 0 auto;
+    padding: 24px 16px 12px;
+  }
+
+  header.app-header {
+    text-align: center;
+    color: var(--ink);
+    margin-bottom: 20px;
+  }
+
+  header.app-header h1 {
+    font-size: 26px;
+    margin: 0 0 4px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+  }
+
+  header.app-header h1 .accent-dot { color: var(--accent); }
+
+  header.app-header p {
+    margin: 0;
+    color: var(--muted);
+    font-size: 14px;
+  }
+
+  .category-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-bottom: 12px;
+  }
+
+  @media (min-width: 640px) {
+    .category-grid { grid-template-columns: repeat(3, 1fr); }
+  }
+
+  .cat-btn {
+    background: var(--card-bg);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    min-height: 88px;
+    padding: 14px 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.35);
+    transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+    text-align: center;
+  }
+
+  .cat-btn:active {
+    transform: scale(0.96);
+    border-color: var(--accent);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.35);
+  }
+
+  .cat-btn .emoji { font-size: 28px; line-height: 1; }
+  .cat-btn .label { font-size: 13px; font-weight: 700; color: var(--ink); }
+
+  .random-btn {
+    width: 100%;
+    min-height: 64px;
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 800;
+    font-size: 17px;
+    border-radius: var(--radius-md);
+    box-shadow: 0 8px 24px rgba(218, 252, 90, 0.25);
+    margin-top: 4px;
+    margin-bottom: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+
+  .random-btn:active { transform: scale(0.98); }
+
+  @media (max-width: 639px) {
+    .random-btn {
+      position: sticky;
+      bottom: calc(12px + var(--safe-bottom));
+      z-index: 5;
+    }
+  }
+
+  footer.app-footer {
+    display: flex;
+    justify-content: center;
+    gap: 24px;
+    padding: 8px 0 calc(12px + var(--safe-bottom));
+  }
+
+  footer.app-footer button {
+    background: transparent;
+    color: var(--muted);
+    font-size: 14px;
+    font-weight: 600;
+    text-decoration: underline;
+    min-height: 48px;
+    padding: 0 8px;
+  }
+
+  footer.app-footer button:active { color: var(--accent); }
+
+  /* ---------- Overlays / Modals ---------- */
+
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 100;
+    padding: 0;
+  }
+
+  .overlay.open { display: flex; }
+
+  @media (min-width: 640px) {
+    .overlay {
+      padding: 24px;
+      backdrop-filter: blur(6px);
+    }
+  }
+
+  .sheet {
+    background: var(--card-bg);
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    overflow-y: auto;
+    padding: 20px 18px calc(20px + var(--safe-bottom));
+    position: relative;
+  }
+
+  @media (min-width: 640px) {
+    .sheet {
+      width: 100%;
+      max-width: 500px;
+      height: auto;
+      max-height: 88vh;
+      border-radius: var(--radius-lg);
+      padding: 24px;
+    }
+  }
+
+  .sheet-close {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    border-radius: 50%;
+    background: var(--card-bg-alt);
+    color: var(--ink);
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 5;
+  }
+  .sheet-close:active { background: var(--border-subtle); }
+
+  .badges-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 0 44px 14px 0;
+  }
+
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 700;
+  }
+
+  .badge-cat { background: var(--card-bg-alt); color: var(--accent); }
+  .badge-type-umob { background: var(--accent); color: var(--accent-ink); }
+  .badge-type-adjacent { background: transparent; color: var(--teal); border: 2px solid var(--teal); }
+  .badge-diff-makkelijk { background: rgba(74, 222, 128, 0.15); color: var(--green); }
+  .badge-diff-middel { background: rgba(251, 191, 36, 0.15); color: var(--orange); }
+  .badge-diff-moeilijk { background: rgba(251, 113, 133, 0.15); color: var(--red); }
+
+  .question-text {
+    font-size: 21px;
+    font-weight: 800;
+    line-height: 1.35;
+    margin: 0 0 18px;
+  }
+
+  .options {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-bottom: 18px;
+  }
+
+  .option-card {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    text-align: left;
+    background: var(--card-bg-alt);
+    border: 2px solid transparent;
+    border-radius: var(--radius-md);
+    padding: 14px 16px;
+    min-height: 56px;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+
+  .option-card .letter {
+    width: 30px;
+    height: 30px;
+    min-width: 30px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: var(--accent-ink);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 800;
+  }
+
+  .option-card.selected { border-color: var(--accent); background: rgba(218, 252, 90, 0.1); }
+  .option-card.correct-answer { border-color: var(--green); background: rgba(74, 222, 128, 0.12); }
+  .option-card.correct-answer .letter { background: var(--green); color: #08140C; }
+  .option-card:active { transform: scale(0.99); }
+
+  .reveal-toggle {
+    width: 100%;
+    min-height: 52px;
+    border-radius: var(--radius-md);
+    background: var(--accent);
+    color: var(--accent-ink);
+    font-weight: 700;
+    font-size: 15px;
+    margin-bottom: 12px;
+  }
+  .reveal-toggle:active { opacity: 0.85; }
+
+  .answer-box {
+    display: none;
+    background: var(--card-bg-alt);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 16px;
+    margin-bottom: 18px;
+  }
+  .answer-box.open { display: block; }
+  .answer-box .correct-label { font-weight: 800; color: var(--green); margin-bottom: 6px; font-size: 14px; }
+  .answer-box .fact-text { font-size: 15px; line-height: 1.4; color: var(--ink); }
+
+  .modal-actions {
+    display: flex;
+    gap: 10px;
+  }
+
+  .modal-actions button {
+    flex: 1;
+    min-height: 52px;
+    border-radius: var(--radius-md);
+    font-weight: 700;
+    font-size: 15px;
+  }
+
+  .btn-copy { background: var(--card-bg-alt); color: var(--ink); border: 1px solid var(--border-subtle); }
+  .btn-copy:active { background: var(--border-subtle); }
+  .btn-again { background: var(--accent); color: var(--accent-ink); }
+  .btn-again:active { opacity: 0.85; }
+
+  .loading-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 60px 10px;
+    gap: 18px;
+  }
+
+  .spinner {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: 5px solid var(--card-bg-alt);
+    border-top-color: var(--accent);
+    animation: spin 0.9s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  @media (prefers-reduced-motion: reduce) {
+    * , *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  .loading-box p { color: var(--muted); font-weight: 600; }
+
+  .error-box { text-align: center; padding: 40px 10px 10px; }
+  .error-box .error-icon { font-size: 40px; margin-bottom: 12px; }
+  .error-box p { color: var(--ink); font-weight: 600; margin-bottom: 20px; line-height: 1.4; }
+  .error-box .countdown { color: var(--muted); font-weight: 700; margin-bottom: 14px; }
+  .btn-retry {
+    background: var(--accent);
+    color: var(--accent-ink);
+    min-height: 52px;
+    padding: 0 24px;
+    border-radius: var(--radius-md);
+    font-weight: 700;
+    font-size: 15px;
+  }
+  .btn-retry:disabled { opacity: 0.5; }
+
+  /* ---------- Welcome / API key ---------- */
+  .field-label { display: block; font-weight: 700; font-size: 14px; margin-bottom: 8px; }
+  .text-input {
+    width: 100%;
+    min-height: 52px;
+    border-radius: var(--radius-md);
+    border: 2px solid var(--border-subtle);
+    background: var(--card-bg-alt);
+    padding: 0 14px;
+    font-size: 16px;
+    margin-bottom: 14px;
+    color: var(--ink);
+  }
+  .text-input:focus { border-color: var(--accent); outline: none; }
+  .help-link { color: var(--accent); font-weight: 600; font-size: 14px; }
+  .btn-primary {
+    width: 100%;
+    min-height: 52px;
+    background: var(--accent);
+    color: var(--accent-ink);
+    border-radius: var(--radius-md);
+    font-weight: 700;
+    font-size: 16px;
+    margin-top: 6px;
+  }
+  .btn-primary:active { opacity: 0.85; }
+  .btn-secondary {
+    width: 100%;
+    min-height: 52px;
+    background: var(--card-bg-alt);
+    color: var(--ink);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    font-weight: 700;
+    font-size: 15px;
+    margin-top: 10px;
+  }
+  .btn-danger {
+    width: 100%;
+    min-height: 52px;
+    background: rgba(251, 113, 133, 0.15);
+    color: var(--red);
+    border-radius: var(--radius-md);
+    font-weight: 700;
+    font-size: 15px;
+    margin-top: 10px;
+  }
+
+  .sheet h2 { font-size: 20px; margin: 0 0 14px; padding-right: 40px; color: var(--ink); }
+  .sheet .subtle { color: var(--muted); font-size: 13px; margin: -8px 0 16px; line-height: 1.4; }
+  .key-display {
+    background: var(--card-bg-alt);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 12px 14px;
+    font-family: monospace;
+    font-size: 14px;
+    margin-bottom: 16px;
+    color: var(--ink);
+  }
+
+  /* ---------- History ---------- */
+  .filters-row { display: flex; gap: 8px; margin-bottom: 16px; }
+  .filters-row select {
+    flex: 1;
+    min-height: 48px;
+    border-radius: var(--radius-md);
+    border: 2px solid var(--border-subtle);
+    padding: 0 10px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+    background: var(--card-bg-alt);
+  }
+
+  .history-empty { text-align: center; color: var(--muted); padding: 40px 10px; font-size: 14px; }
+
+  .history-group { margin-bottom: 18px; }
+  .history-group h3 { font-size: 15px; margin: 0 0 10px; color: var(--ink); display: flex; align-items: center; gap: 6px; }
+
+  .history-item {
+    background: var(--card-bg-alt);
+    border: 1px solid var(--border-subtle);
+    border-radius: var(--radius-md);
+    padding: 12px 14px;
+    margin-bottom: 8px;
+  }
+  .history-item summary {
+    list-style: none;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--ink);
+    display: flex;
+    justify-content: space-between;
+    gap: 8px;
+    align-items: flex-start;
+  }
+  .history-item summary::-webkit-details-marker { display: none; }
+  .history-item .hi-badges { display: flex; gap: 4px; flex-shrink: 0; margin-top: 2px; }
+  .history-item .hi-badge { font-size: 10px; padding: 2px 7px; border-radius: 999px; font-weight: 700; white-space: nowrap; }
+  .history-item .hi-detail { margin-top: 10px; font-size: 13px; line-height: 1.5; color: var(--muted); }
+  .history-item .hi-detail .hi-correct { color: var(--green); font-weight: 700; }
+
+  .export-row { display: flex; gap: 8px; margin-top: 16px; flex-wrap: wrap; }
+  .export-row button {
+    flex: 1 1 30%;
+    min-height: 48px;
+    border-radius: var(--radius-md);
+    background: var(--card-bg-alt);
+    border: 1px solid var(--border-subtle);
+    color: var(--ink);
+    font-weight: 700;
+    font-size: 13px;
+    padding: 0 6px;
+  }
+  .export-row button:active { background: var(--border-subtle); }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <header class="app-header">
+    <h1>🎡 Umob Draairad</h1>
+    <p>Genereer viral quiz-vragen voor content</p>
+  </header>
+
+  <div class="category-grid" id="category-grid"></div>
+
+  <button class="random-btn" id="random-btn" type="button">🎲 Random</button>
+
+  <footer class="app-footer">
+    <button type="button" id="open-history">Historie</button>
+    <button type="button" id="open-settings">Instellingen</button>
+  </footer>
+</div>
+
+<!-- Question modal (only closes via X) -->
+<div class="overlay" id="question-overlay">
+  <div class="sheet" id="question-sheet" role="dialog" aria-modal="true">
+    <button class="sheet-close" id="question-close" type="button" aria-label="Sluiten">✕</button>
+    <div id="question-body"></div>
+  </div>
+</div>
+
+<!-- History overlay -->
+<div class="overlay" id="history-overlay">
+  <div class="sheet" role="dialog" aria-modal="true">
+    <button class="sheet-close" id="history-close" type="button" aria-label="Sluiten">✕</button>
+    <h2>Historie</h2>
+    <div class="filters-row">
+      <select id="filter-type">
+        <option value="all">Alle types</option>
+        <option value="umob">Umob</option>
+        <option value="adjacent">Adjacent</option>
+      </select>
+      <select id="filter-difficulty">
+        <option value="all">Alle niveaus</option>
+        <option value="makkelijk">Makkelijk</option>
+        <option value="middel">Middel</option>
+        <option value="moeilijk">Moeilijk</option>
+      </select>
+    </div>
+    <div id="history-content"></div>
+    <div class="export-row">
+      <button type="button" id="export-json">⬇️ JSON</button>
+      <button type="button" id="export-csv">⬇️ CSV</button>
+      <button type="button" id="export-copy">📋 Kopieer alles</button>
+    </div>
+  </div>
+</div>
+
+<!-- Settings overlay -->
+<div class="overlay" id="settings-overlay">
+  <div class="sheet" role="dialog" aria-modal="true">
+    <button class="sheet-close" id="settings-close" type="button" aria-label="Sluiten">✕</button>
+    <h2>Instellingen</h2>
+    <p class="subtle">Vraaggeneratie loopt via een server-side proxy — geen API key nodig in de browser.</p>
+    <button class="btn-danger" id="settings-clear-all" type="button">Geschiedenis wissen</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ==================== CONFIG ==================== */
+  const CONFIG = {
+    // Makkelijk aanpasbaar: pas dit model-ID aan om een ander Claude-model te gebruiken.
+    // Let op: het model wordt ook hardcoded gebruikt in /api/generate.js (server-side) — pas daar mee aan.
+    MODEL: "claude-sonnet-5",
+    // Relatieve URL naar onze eigen Vercel serverless function (server-side proxy).
+    // Die bewaart de Anthropic API key veilig als environment variable — de browser ziet 'm nooit.
+    API_URL: "/api/generate",
+    MAX_TOKENS: 1024,
+    MAX_DEDUPE_RETRIES: 3,
+    MAX_PARSE_RETRIES: 3,
+    STORAGE_KEY_QUESTIONS: "umob_questions"
+  };
+
+  /* ==================== CATEGORIES ==================== */
+  const CATEGORIES = [
+    {
+      id: "steden",
+      emoji: "🏙️",
+      label: "Steden & Landen",
+      description: "vragen over waar Umob actief is en welke steden bekend zijn om welk vervoer.",
+      goodUmob: 'In hoeveel landen kun je Umob gebruiken? A) 12+ B) 20+ C) 35+',
+      goodAdjacent: 'Welke Europese hoofdstad heeft de langste metrolijn ter wereld? A) Londen B) Moskou C) Parijs',
+      bad: 'Wat is de hoofdstad van Nederland? (te makkelijk, geen brand-fit)'
+    },
+    {
+      id: "vervoer",
+      emoji: "🛴",
+      label: "Vervoer-type",
+      description: "over verschillende manieren van deelvervoer, hun eigenschappen, kosten, snelheid.",
+      goodUmob: 'Welk vervoer vind je NIET in Umob? A) Deelscooter B) Waterfiets C) Deelauto',
+      goodAdjacent: 'Wat is gemiddeld sneller in de Amsterdamse binnenstad? A) Auto B) E-bike C) Metro',
+      bad: 'Is een fiets ecologisch? (te vaag, geen echt antwoord)'
+    },
+    {
+      id: "slim",
+      emoji: "🧠",
+      label: "Slimme reiziger",
+      description: "kosten/tijd vergelijken, slimste route kiezen, geldbesparen.",
+      goodUmob: 'Rit van 4 km in Amsterdam — wat is meestal het goedkoopst via Umob? A) Deelscooter B) Deelauto C) Taxi',
+      goodAdjacent: 'Op welke afstand is fietsen gemiddeld sneller dan de auto in de stad? A) Onder 2 km B) Onder 5 km C) Onder 10 km',
+      bad: 'Wat is duurzaam reizen? (te algemeen)'
+    },
+    {
+      id: "app",
+      emoji: "📱",
+      label: "Umob-app",
+      description: "features en werking van de app zelf.",
+      goodUmob: 'Hoeveel accounts heb je nodig om alle aanbieders in Umob te gebruiken? A) 1 B) 3 C) Per aanbieder één',
+      goodAdjacent: 'Wat is het grootste voordeel van één mobiliteits-app t.o.v. losse apps per aanbieder? A) Minder accounts nodig B) Altijd korting C) Sneller internet',
+      bad: 'Kun je de app downloaden? (geen echte quiz)'
+    },
+    {
+      id: "weetjes",
+      emoji: "💡",
+      label: "Wist je dat",
+      description: "verrassende weetjes over mobiliteit die goed doen op social.",
+      goodUmob: 'Wist je dat vraag: hoeveel steden wereldwijd biedt Umob inzicht in via de app? A) 100+ B) 260+ C) 500+',
+      goodAdjacent: 'Welke stad had als eerste ter wereld een deelscooter-systeem? A) Los Angeles B) Berlijn C) Santa Monica',
+      bad: 'Wist je dat auto\'s rijden op benzine? (basiskennis)'
+    },
+    {
+      id: "battle",
+      emoji: "⚔️",
+      label: "Battle",
+      description: 'opinion-driven vragen die comments triggeren. Er is geen "fout" antwoord — de host kan zelf een "juist" antwoord kiezen op basis van meerderheidsopinie of grap.',
+      goodUmob: 'Kies één: A) Alleen Umob voor al je ritten B) Los per aanbieder blijven kiezen C) Altijd de goedkoopste optie, ongeacht app',
+      goodAdjacent: 'Wat is erger op de fiets? A) Regen in je gezicht B) Tegenwind C) Rood stoplicht bij elke kruising',
+      bad: 'Wat is beter, auto of fiets? (te simpel, geen twist)',
+      extraInstruction: 'Markeer `correct` als de meest waarschijnlijke meerderheidskeuze, en zet in de `fact` iets als "meningen verdeeld — laat je antwoord in de comments!" zodat het engagement-driver is.'
+    }
+  ];
+
+  const SYSTEM_PROMPT = `Je bent een expert social media strateeg gespecialiseerd in viral quiz content voor mobiliteitsmerken. Je schrijft vragen voor Umob — een Nederlandse mobiliteitsapp die alle deelvervoer-aanbieders in één app samenbrengt (20+ landen, 260+ steden, deelscooters/deelfietsen/deelauto's/OV/taxi).
+
+Deze vragen worden gebruikt in TikTok/Reels-video's waar random voorbijgangers een draairad draaien en 3 vragen krijgen. Doel: 2/3 goed = giftcard.
+
+REGELS voor virale vragen:
+- Antwoord moet verrassend zijn ("wait, echt?") of controversieel genoeg om comments te triggeren
+- Geen droge feitjes zonder karakter
+- Multiple choice met 3 opties (A/B/C) waar minstens 2 opties plausibel klinken
+- Geen inside jokes, geen technisch jargon
+- Passen in ~10 seconden voorlezen (vraag + opties)
+- Weetjes-zin na antwoord moet een "oh nice" moment geven voor de host om te zeggen
+
+FORMAT (return exact JSON, geen extra tekst):
+{
+  "question": "de vraagtekst",
+  "options": {"A": "...", "B": "...", "C": "..."},
+  "correct": "A" | "B" | "C",
+  "fact": "korte weetjes-zin die de host na het antwoord kan zeggen (max 20 woorden)",
+  "type": "umob" | "adjacent",
+  "difficulty": "makkelijk" | "middel" | "moeilijk"
+}`;
+
+  /* ==================== STATE ==================== */
+  let currentCategoryId = null;
+  let currentQuestion = null;
+  let rateLimitTimer = null;
+
+  /* ==================== STORAGE HELPERS ==================== */
+  function getHistory() {
+    try {
+      const raw = localStorage.getItem(CONFIG.STORAGE_KEY_QUESTIONS);
+      return raw ? JSON.parse(raw) : [];
+    } catch (e) {
+      return [];
+    }
+  }
+  function saveHistory(list) {
+    localStorage.setItem(CONFIG.STORAGE_KEY_QUESTIONS, JSON.stringify(list));
+  }
+  function addToHistory(record) {
+    const list = getHistory();
+    list.push(record);
+    saveHistory(list);
+  }
+  function isDuplicateHash(hash) {
+    return getHistory().some(function (q) { return q.hash === hash; });
+  }
+
+  /* ==================== HASHING ==================== */
+  async function sha1(text) {
+    const enc = new TextEncoder().encode(text);
+    const buf = await crypto.subtle.digest("SHA-1", enc);
+    return Array.from(new Uint8Array(buf)).map(function (b) {
+      return b.toString(16).padStart(2, "0");
+    }).join("");
+  }
+
+  /* ==================== RANDOM HELPERS ==================== */
+  function pickType() {
+    return Math.random() < 0.5 ? "umob" : "adjacent";
+  }
+  function pickDifficulty() {
+    const r = Math.random();
+    if (r < 0.4) return "makkelijk";
+    if (r < 0.8) return "middel";
+    return "moeilijk";
+  }
+  function pickRandomCategory() {
+    return CATEGORIES[Math.floor(Math.random() * CATEGORIES.length)];
+  }
+
+  /* ==================== PROMPT BUILDING ==================== */
+  function buildUserMessage(category, type, difficulty, strict) {
+    const typeLabel = type === "umob" ? "Umob-specifiek" : "Adjacent (mobiliteit/reizen algemeen, niet direct Umob)";
+    let msg = "Categorie: " + category.emoji + " " + category.label + "\n";
+    msg += "Doel van deze categorie: " + category.description + "\n";
+    if (category.goodUmob) msg += "Goed voorbeeld (Umob-type): " + category.goodUmob + "\n";
+    if (category.goodAdjacent) msg += "Goed voorbeeld (Adjacent-type): " + category.goodAdjacent + "\n";
+    msg += "Slecht voorbeeld (vermijd dit soort vragen): " + category.bad + "\n";
+    if (category.extraInstruction) msg += category.extraInstruction + "\n";
+    msg += "\nGenereer een vraag van dit type: " + typeLabel + ".\n";
+    msg += "Gebruik deze moeilijkheidsgraad: " + difficulty + ".\n";
+    msg += '\nGenereer nu ÉÉN nieuwe vraag in dit format. Alleen JSON.';
+    if (strict) {
+      msg += "\n\nBELANGRIJK: Antwoord ALLEEN met geldige, parsbare JSON. Geen markdown code fences (```), geen uitleg, geen tekst voor of na de JSON.";
+    }
+    return msg;
+  }
+
+  /* ==================== API CALL ==================== */
+  async function callClaudeAPI(userMessage) {
+    // Roept onze eigen /api/generate serverless function aan (server-side proxy).
+    // De Anthropic API key blijft server-side (Vercel environment variable) — nooit in de browser.
+    let res;
+    try {
+      res = await fetch(CONFIG.API_URL, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json"
+        },
+        body: JSON.stringify({
+          model: CONFIG.MODEL,
+          max_tokens: CONFIG.MAX_TOKENS,
+          system: SYSTEM_PROMPT,
+          messages: [{ role: "user", content: userMessage }]
+        })
+      });
+    } catch (networkErr) {
+      const err = new Error("network");
+      err.type = "network";
+      throw err;
+    }
+
+    if (!res.ok) {
+      if (res.status === 429) {
+        const retryAfterHeader = res.headers.get("retry-after");
+        const err = new Error("rate_limit");
+        err.type = "rate_limit";
+        err.retryAfter = retryAfterHeader ? parseInt(retryAfterHeader, 10) : 30;
+        throw err;
+      }
+      let message = "HTTP " + res.status;
+      try {
+        const body = await res.json();
+        if (body && body.error && body.error.message) message = body.error.message;
+      } catch (e) { /* ignore */ }
+      const err = new Error(message);
+      err.type = res.status >= 500 ? "server" : "client";
+      err.status = res.status;
+      throw err;
+    }
+
+    const data = await res.json();
+    const text = (data.content && data.content[0] && data.content[0].text) || "";
+    return text;
+  }
+
+  function extractJSON(text) {
+    let t = text.trim();
+    t = t.replace(/^```json\s*/i, "").replace(/^```\s*/, "").replace(/```\s*$/, "");
+    return JSON.parse(t);
+  }
+
+  function validateQuestionObject(obj) {
+    if (!obj || typeof obj !== "object") throw new Error("invalid");
+    if (typeof obj.question !== "string" || !obj.question.trim()) throw new Error("invalid");
+    if (!obj.options || typeof obj.options !== "object") throw new Error("invalid");
+    if (!["A", "B", "C"].every(function (k) { return typeof obj.options[k] === "string" && obj.options[k].trim(); })) {
+      throw new Error("invalid");
+    }
+    if (!["A", "B", "C"].includes(obj.correct)) throw new Error("invalid");
+    if (typeof obj.fact !== "string" || !obj.fact.trim()) throw new Error("invalid");
+    return true;
+  }
+
+  /* ==================== GENERATION FLOW ==================== */
+  function generateQuestion(categoryId) {
+    const category = CATEGORIES.find(function (c) { return c.id === categoryId; });
+    if (!category) return;
+    currentCategoryId = categoryId;
+
+    openQuestionModal();
+    renderLoading();
+
+    const type = pickType();
+    const difficulty = pickDifficulty();
+    runGeneration(category, type, difficulty, 0, 0);
+  }
+
+  function runGeneration(category, type, difficulty, dedupeAttempt, parseAttempt) {
+    const strict = parseAttempt > 0;
+    const userMsg = buildUserMessage(category, type, difficulty, strict);
+
+    callClaudeAPI(userMsg).then(function (text) {
+      let obj;
+      try {
+        obj = extractJSON(text);
+        validateQuestionObject(obj);
+      } catch (parseErr) {
+        if (parseAttempt < CONFIG.MAX_PARSE_RETRIES - 1) {
+          runGeneration(category, type, difficulty, dedupeAttempt, parseAttempt + 1);
+        } else {
+          renderError(
+            "Kon geen geldige vraag genereren (JSON-fout). Probeer het opnieuw.",
+            function () { renderLoading(); runGeneration(category, type, difficulty, 0, 0); }
+          );
+        }
+        return;
+      }
+
+      sha1(obj.question.trim().toLowerCase()).then(function (hash) {
+        if (isDuplicateHash(hash) && dedupeAttempt < CONFIG.MAX_DEDUPE_RETRIES - 1) {
+          runGeneration(category, type, difficulty, dedupeAttempt + 1, 0);
+          return;
+        }
+
+        const record = {
+          question: obj.question,
+          options: obj.options,
+          correct: obj.correct,
+          fact: obj.fact,
+          type: type,
+          difficulty: difficulty,
+          category: category.id,
+          categoryLabel: category.label,
+          categoryEmoji: category.emoji,
+          hash: hash,
+          createdAt: Date.now()
+        };
+        addToHistory(record);
+        currentQuestion = record;
+        renderQuestion(record);
+      });
+    }).catch(function (err) {
+      handleGenerationError(err, function () {
+        renderLoading();
+        runGeneration(category, type, difficulty, dedupeAttempt, parseAttempt);
+      });
+    });
+  }
+
+  function handleGenerationError(err, retryFn) {
+    if (rateLimitTimer) { clearInterval(rateLimitTimer); rateLimitTimer = null; }
+
+    if (err.type === "rate_limit") {
+      let remaining = err.retryAfter || 30;
+      renderRateLimitError(remaining, retryFn);
+      rateLimitTimer = setInterval(function () {
+        remaining -= 1;
+        updateRateLimitCountdown(remaining, retryFn);
+        if (remaining <= 0) {
+          clearInterval(rateLimitTimer);
+          rateLimitTimer = null;
+        }
+      }, 1000);
+      return;
+    }
+
+    if (err.type === "network") {
+      renderError("Geen internet, probeer opnieuw.", retryFn);
+      return;
+    }
+
+    if (err.type === "server") {
+      renderError("Er ging iets mis bij het genereren (serverfout). Probeer opnieuw.", retryFn);
+      return;
+    }
+
+    renderError("API-fout: " + (err.message || "onbekende fout") + ". Controleer je API key of probeer opnieuw.", retryFn);
+  }
+
+  /* ==================== MODAL: QUESTION ==================== */
+  const questionOverlay = document.getElementById("question-overlay");
+  const questionBody = document.getElementById("question-body");
+
+  function openQuestionModal() {
+    questionOverlay.classList.add("open");
+  }
+  function closeQuestionModal() {
+    questionOverlay.classList.remove("open");
+    if (rateLimitTimer) { clearInterval(rateLimitTimer); rateLimitTimer = null; }
+  }
+  document.getElementById("question-close").addEventListener("click", closeQuestionModal);
+  // Backdrop click and Escape intentionally do nothing — modal only closes via the X button.
+
+  function renderLoading() {
+    questionBody.innerHTML =
+      '<div class="loading-box">' +
+      '<div class="spinner" aria-hidden="true"></div>' +
+      '<p>Vraag wordt gemaakt...</p>' +
+      '</div>';
+  }
+
+  function renderError(message, retryFn) {
+    questionBody.innerHTML =
+      '<div class="error-box">' +
+      '<div class="error-icon">⚠️</div>' +
+      '<p>' + escapeHTML(message) + '</p>' +
+      '<button class="btn-retry" type="button" id="error-retry-btn">Probeer opnieuw</button>' +
+      '</div>';
+    document.getElementById("error-retry-btn").addEventListener("click", retryFn);
+  }
+
+  function renderRateLimitError(seconds, retryFn) {
+    questionBody.innerHTML =
+      '<div class="error-box">' +
+      '<div class="error-icon">⏳</div>' +
+      '<p>Te snel gegenereerd, wacht ' + '<span id="rl-seconds">' + seconds + '</span>' + ' seconden</p>' +
+      '<button class="btn-retry" type="button" id="error-retry-btn" disabled>Probeer opnieuw</button>' +
+      '</div>';
+    document.getElementById("error-retry-btn").addEventListener("click", retryFn);
+  }
+
+  function updateRateLimitCountdown(seconds, retryFn) {
+    const secEl = document.getElementById("rl-seconds");
+    const btn = document.getElementById("error-retry-btn");
+    if (secEl) secEl.textContent = Math.max(seconds, 0);
+    if (btn && seconds <= 0) btn.disabled = false;
+  }
+
+  function renderQuestion(q) {
+    const diffLabelMap = { makkelijk: "Makkelijk", middel: "Middel", moeilijk: "Moeilijk" };
+    const typeLabelMap = { umob: "Umob", adjacent: "Adjacent" };
+
+    let html = '<div class="badges-row">';
+    html += '<span class="badge badge-cat">' + q.categoryEmoji + ' ' + escapeHTML(q.categoryLabel) + '</span>';
+    html += '<span class="badge badge-type-' + q.type + '">' + typeLabelMap[q.type] + '</span>';
+    html += '<span class="badge badge-diff-' + q.difficulty + '">' + diffLabelMap[q.difficulty] + '</span>';
+    html += '</div>';
+
+    html += '<p class="question-text">' + escapeHTML(q.question) + '</p>';
+
+    html += '<div class="options" id="options-list">';
+    ["A", "B", "C"].forEach(function (letter) {
+      html += '<button type="button" class="option-card" data-letter="' + letter + '">' +
+        '<span class="letter">' + letter + '</span>' +
+        '<span>' + escapeHTML(q.options[letter]) + '</span>' +
+        '</button>';
+    });
+    html += '</div>';
+
+    html += '<button class="reveal-toggle" type="button" id="reveal-toggle">Toon antwoord</button>';
+    html += '<div class="answer-box" id="answer-box">';
+    html += '<div class="correct-label">✅ Juist antwoord: ' + q.correct + ') ' + escapeHTML(q.options[q.correct]) + '</div>';
+    html += '<div class="fact-text">💡 ' + escapeHTML(q.fact) + '</div>';
+    html += '</div>';
+
+    html += '<div class="modal-actions">';
+    html += '<button class="btn-copy" type="button" id="copy-btn">📋 Kopieer</button>';
+    html += '<button class="btn-again" type="button" id="again-btn">🔁 Nog één</button>';
+    html += '</div>';
+
+    questionBody.innerHTML = html;
+
+    document.querySelectorAll("#options-list .option-card").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        document.querySelectorAll("#options-list .option-card").forEach(function (b) { b.classList.remove("selected"); });
+        btn.classList.add("selected");
+      });
+    });
+
+    document.getElementById("reveal-toggle").addEventListener("click", function () {
+      const box = document.getElementById("answer-box");
+      const isOpen = box.classList.toggle("open");
+      this.textContent = isOpen ? "Verberg antwoord" : "Toon antwoord";
+      if (isOpen) {
+        const correctBtn = document.querySelector('#options-list .option-card[data-letter="' + q.correct + '"]');
+        if (correctBtn) correctBtn.classList.add("correct-answer");
+      } else {
+        const correctBtn = document.querySelector('#options-list .option-card[data-letter="' + q.correct + '"]');
+        if (correctBtn) correctBtn.classList.remove("correct-answer");
+      }
+    });
+
+    document.getElementById("copy-btn").addEventListener("click", function () {
+      copyQuestionToClipboard(q);
+    });
+
+    document.getElementById("again-btn").addEventListener("click", function () {
+      renderLoading();
+      const category = CATEGORIES.find(function (c) { return c.id === q.category; });
+      const type = pickType();
+      const difficulty = pickDifficulty();
+      runGeneration(category, type, difficulty, 0, 0);
+    });
+  }
+
+  function copyQuestionToClipboard(q) {
+    const diffLabelMap = { makkelijk: "Makkelijk", middel: "Middel", moeilijk: "Moeilijk" };
+    const typeLabelMap = { umob: "Umob", adjacent: "Adjacent" };
+    const text =
+      q.categoryEmoji + " " + q.categoryLabel + " (" + typeLabelMap[q.type] + ", " + diffLabelMap[q.difficulty] + ")\n\n" +
+      "Vraag: " + q.question + "\n" +
+      "A) " + q.options.A + "\n" +
+      "B) " + q.options.B + "\n" +
+      "C) " + q.options.C + "\n\n" +
+      "Antwoord: " + q.correct + ") " + q.options[q.correct] + "\n" +
+      "Weetje: " + q.fact;
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(function () {
+        flashCopyButton();
+      }).catch(function () {
+        fallbackCopy(text);
+      });
+    } else {
+      fallbackCopy(text);
+    }
+  }
+
+  function fallbackCopy(text) {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    try { document.execCommand("copy"); } catch (e) { /* ignore */ }
+    document.body.removeChild(ta);
+    flashCopyButton();
+  }
+
+  function flashCopyButton() {
+    const btn = document.getElementById("copy-btn");
+    if (!btn) return;
+    const original = btn.textContent;
+    btn.textContent = "✅ Gekopieerd";
+    setTimeout(function () { btn.textContent = original; }, 1500);
+  }
+
+  function escapeHTML(str) {
+    const div = document.createElement("div");
+    div.textContent = String(str);
+    return div.innerHTML;
+  }
+
+  /* ==================== CATEGORY GRID ==================== */
+  const grid = document.getElementById("category-grid");
+  CATEGORIES.forEach(function (cat) {
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "cat-btn";
+    btn.innerHTML = '<span class="emoji">' + cat.emoji + '</span><span class="label">' + escapeHTML(cat.label) + '</span>';
+    btn.addEventListener("click", function () { generateQuestion(cat.id); });
+    grid.appendChild(btn);
+  });
+
+  document.getElementById("random-btn").addEventListener("click", function () {
+    const cat = pickRandomCategory();
+    generateQuestion(cat.id);
+  });
+
+  /* ==================== HISTORY ==================== */
+  const historyOverlay = document.getElementById("history-overlay");
+  const historyContent = document.getElementById("history-content");
+  const filterType = document.getElementById("filter-type");
+  const filterDifficulty = document.getElementById("filter-difficulty");
+
+  document.getElementById("open-history").addEventListener("click", function () {
+    renderHistory();
+    historyOverlay.classList.add("open");
+  });
+  document.getElementById("history-close").addEventListener("click", function () {
+    historyOverlay.classList.remove("open");
+  });
+  historyOverlay.addEventListener("click", function (e) {
+    if (e.target === historyOverlay) historyOverlay.classList.remove("open");
+  });
+
+  filterType.addEventListener("change", renderHistory);
+  filterDifficulty.addEventListener("change", renderHistory);
+
+  function getFilteredHistory() {
+    const t = filterType.value;
+    const d = filterDifficulty.value;
+    return getHistory().filter(function (q) {
+      if (t !== "all" && q.type !== t) return false;
+      if (d !== "all" && q.difficulty !== d) return false;
+      return true;
+    });
+  }
+
+  const diffLabelMap = { makkelijk: "Makkelijk", middel: "Middel", moeilijk: "Moeilijk" };
+  const typeLabelMap = { umob: "Umob", adjacent: "Adjacent" };
+
+  function renderHistory() {
+    const list = getFilteredHistory();
+    if (list.length === 0) {
+      historyContent.innerHTML = '<div class="history-empty">Nog geen vragen gegenereerd (of niets matcht je filters).</div>';
+      return;
+    }
+
+    const grouped = {};
+    list.slice().reverse().forEach(function (q) {
+      if (!grouped[q.category]) grouped[q.category] = [];
+      grouped[q.category].push(q);
+    });
+
+    let html = "";
+    CATEGORIES.forEach(function (cat) {
+      const items = grouped[cat.id];
+      if (!items || items.length === 0) return;
+      html += '<div class="history-group">';
+      html += '<h3>' + cat.emoji + ' ' + escapeHTML(cat.label) + ' (' + items.length + ')</h3>';
+      items.forEach(function (q) {
+        html += '<details class="history-item">';
+        html += '<summary><span>' + escapeHTML(truncate(q.question, 70)) + '</span>';
+        html += '<span class="hi-badges">';
+        html += '<span class="hi-badge badge-type-' + q.type + '">' + typeLabelMap[q.type] + '</span>';
+        html += '<span class="hi-badge badge-diff-' + q.difficulty + '">' + diffLabelMap[q.difficulty] + '</span>';
+        html += '</span></summary>';
+        html += '<div class="hi-detail">';
+        html += 'A) ' + escapeHTML(q.options.A) + '<br>';
+        html += 'B) ' + escapeHTML(q.options.B) + '<br>';
+        html += 'C) ' + escapeHTML(q.options.C) + '<br>';
+        html += '<span class="hi-correct">Antwoord: ' + q.correct + ') ' + escapeHTML(q.options[q.correct]) + '</span><br>';
+        html += '💡 ' + escapeHTML(q.fact);
+        html += '</div>';
+        html += '</details>';
+      });
+      html += '</div>';
+    });
+
+    historyContent.innerHTML = html || '<div class="history-empty">Nog geen vragen gegenereerd.</div>';
+  }
+
+  function truncate(str, len) {
+    return str.length > len ? str.slice(0, len - 1) + "…" : str;
+  }
+
+  /* ---- Export ---- */
+  function downloadBlob(content, filename, mime) {
+    const blob = new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
+  function csvEscape(val) {
+    const s = String(val == null ? "" : val);
+    if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+    return s;
+  }
+
+  document.getElementById("export-json").addEventListener("click", function () {
+    const list = getFilteredHistory();
+    downloadBlob(JSON.stringify(list, null, 2), "umob-vragen.json", "application/json");
+  });
+
+  document.getElementById("export-csv").addEventListener("click", function () {
+    const list = getFilteredHistory();
+    const header = ["categorie", "type", "moeilijkheid", "vraag", "A", "B", "C", "correct", "fact"];
+    const rows = [header.join(",")];
+    list.forEach(function (q) {
+      rows.push([
+        csvEscape(q.categoryLabel),
+        csvEscape(q.type),
+        csvEscape(q.difficulty),
+        csvEscape(q.question),
+        csvEscape(q.options.A),
+        csvEscape(q.options.B),
+        csvEscape(q.options.C),
+        csvEscape(q.correct),
+        csvEscape(q.fact)
+      ].join(","));
+    });
+    downloadBlob(rows.join("\n"), "umob-vragen.csv", "text/csv");
+  });
+
+  document.getElementById("export-copy").addEventListener("click", function () {
+    const list = getFilteredHistory();
+    const text = list.map(function (q) {
+      return q.categoryEmoji + " " + q.categoryLabel + " (" + typeLabelMap[q.type] + ", " + diffLabelMap[q.difficulty] + ")\n" +
+        "Vraag: " + q.question + "\n" +
+        "A) " + q.options.A + "\nB) " + q.options.B + "\nC) " + q.options.C + "\n" +
+        "Antwoord: " + q.correct + ") " + q.options[q.correct] + "\n" +
+        "Weetje: " + q.fact;
+    }).join("\n\n---\n\n");
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text || "Geen vragen om te kopiëren.");
+    } else {
+      fallbackCopy(text || "Geen vragen om te kopiëren.");
+    }
+  });
+
+  /* ==================== SETTINGS ==================== */
+  const settingsOverlay = document.getElementById("settings-overlay");
+
+  document.getElementById("open-settings").addEventListener("click", function () {
+    settingsOverlay.classList.add("open");
+  });
+  document.getElementById("settings-close").addEventListener("click", function () {
+    settingsOverlay.classList.remove("open");
+  });
+  settingsOverlay.addEventListener("click", function (e) {
+    if (e.target === settingsOverlay) settingsOverlay.classList.remove("open");
+  });
+
+  document.getElementById("settings-clear-all").addEventListener("click", function () {
+    if (confirm("Weet je zeker dat je de volledige geschiedenis wilt wissen? Dit kan niet ongedaan gemaakt worden.")) {
+      saveHistory([]);
+      settingsOverlay.classList.remove("open");
+    }
+  });
+
+})();
+</script>
+</body>
+</html>
