@@ -75,6 +75,7 @@
   }
 
   header.app-header {
+    position: relative;
     text-align: center;
     color: var(--ink);
     margin-bottom: 20px;
@@ -85,6 +86,22 @@
     width: auto;
     margin: 0 0 8px;
   }
+
+  .lang-toggle {
+    position: absolute;
+    top: 0;
+    right: 0;
+    padding: 8px 14px;
+    min-height: 36px;
+    border-radius: 999px;
+    border: 1px solid var(--border-subtle);
+    background: var(--card-bg-alt);
+    color: var(--ink);
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .lang-toggle:active { transform: scale(0.96); }
 
   /* ---------- Swipe captcha ---------- */
   .swipe-track {
@@ -527,8 +544,9 @@
 
 <div class="container">
   <header class="app-header">
+    <button class="lang-toggle" id="lang-toggle" type="button">🇬🇧 EN</button>
     <img src="UMOB_LOGO_RGB_YELLOW.png" alt="Umob" class="app-logo">
-    <p>Genereer viral quiz-vragen voor content</p>
+    <p id="header-subtitle">Genereer viral quiz-vragen voor content</p>
   </header>
 
   <div class="category-grid" id="category-grid"></div>
@@ -553,18 +571,18 @@
 <div class="overlay" id="history-overlay">
   <div class="sheet" role="dialog" aria-modal="true">
     <button class="sheet-close" id="history-close" type="button" aria-label="Sluiten">✕</button>
-    <h2>Historie</h2>
+    <h2 id="history-title">Historie</h2>
     <div class="filters-row">
       <select id="filter-type">
-        <option value="all">Alle types</option>
+        <option value="all" id="opt-all-types">Alle types</option>
         <option value="umob">Umob</option>
         <option value="adjacent">Adjacent</option>
       </select>
       <select id="filter-difficulty">
-        <option value="all">Alle niveaus</option>
-        <option value="makkelijk">Makkelijk</option>
-        <option value="middel">Middel</option>
-        <option value="moeilijk">Moeilijk</option>
+        <option value="all" id="opt-all-levels">Alle niveaus</option>
+        <option value="makkelijk" id="opt-diff-makkelijk">Makkelijk</option>
+        <option value="middel" id="opt-diff-middel">Middel</option>
+        <option value="moeilijk" id="opt-diff-moeilijk">Moeilijk</option>
       </select>
     </div>
     <div id="history-content"></div>
@@ -580,8 +598,8 @@
 <div class="overlay" id="settings-overlay">
   <div class="sheet" role="dialog" aria-modal="true">
     <button class="sheet-close" id="settings-close" type="button" aria-label="Sluiten">✕</button>
-    <h2>Instellingen</h2>
-    <p class="subtle">Vragen komen uit een vaste, lokale vragenbank (~192 vragen) — geen API of internetverbinding nodig.</p>
+    <h2 id="settings-title">Instellingen</h2>
+    <p class="subtle" id="settings-info">Vragen komen uit een vaste, lokale vragenbank (~202 vragen) — geen API of internetverbinding nodig.</p>
     <button class="btn-secondary" id="settings-reset-pool" type="button">🔄 Pool resetten (alle vragen weer beschikbaar)</button>
     <button class="btn-danger" id="settings-clear-all" type="button">Geschiedenis wissen</button>
   </div>
@@ -692,21 +710,129 @@
     STORAGE_KEY_USED: "umob_used_pool"
   };
 
+  /* ==================== LANGUAGE ====================
+     Vragen komen uit twee losse, taalspecifieke vragenbanken
+     (QUESTION_BANK_NL / QUESTION_BANK_EN). Alleen de content wisselt
+     mee met de knop; interne sleutels (type/difficulty/category id)
+     blijven identiek zodat filters en dedupe blijven werken. */
+  const LANG_KEY = "umob_lang";
+  function getLang() {
+    return localStorage.getItem(LANG_KEY) === "en" ? "en" : "nl";
+  }
+  function setLang(lang) {
+    localStorage.setItem(LANG_KEY, lang);
+  }
+  function getBank() {
+    return getLang() === "en" ? QUESTION_BANK_EN : QUESTION_BANK_NL;
+  }
+
+  const STRINGS = {
+    nl: {
+      subtitle: "Genereer viral quiz-vragen voor content",
+      langToggle: "🇬🇧 EN",
+      random: "🎲 Random",
+      history: "Historie",
+      settings: "Instellingen",
+      historyTitle: "Historie",
+      allTypes: "Alle types",
+      allLevels: "Alle niveaus",
+      diffMakkelijk: "Makkelijk",
+      diffMiddel: "Middel",
+      diffMoeilijk: "Moeilijk",
+      typeUmob: "Umob",
+      typeAdjacent: "Adjacent",
+      exportJson: "⬇️ JSON",
+      exportCsv: "⬇️ CSV",
+      exportCopy: "📋 Kopieer alles",
+      settingsTitle: "Instellingen",
+      settingsInfo: "Vragen komen uit een vaste, lokale vragenbank (~202 vragen) — geen API of internetverbinding nodig.",
+      resetPool: "🔄 Pool resetten (alle vragen weer beschikbaar)",
+      resetPoolDone: "✅ Pool gereset",
+      clearHistory: "Geschiedenis wissen",
+      clearHistoryConfirm: "Weet je zeker dat je de volledige geschiedenis wilt wissen? Dit kan niet ongedaan gemaakt worden.",
+      loading: "Vraag wordt gekozen...",
+      correctPrefix: "✅ Juist antwoord: ",
+      copy: "📋 Kopieer",
+      copied: "✅ Gekopieerd",
+      again: "🔁 Nog één",
+      historyEmptyFiltered: "Nog geen vragen gegenereerd (of niets matcht je filters).",
+      historyEmpty: "Nog geen vragen gegenereerd.",
+      questionLabel: "Vraag: ",
+      answerLabel: "Antwoord: ",
+      factLabel: "Weetje: ",
+      noQuestionsToCopy: "Geen vragen om te kopiëren.",
+      csvHeader: ["categorie", "type", "moeilijkheid", "vraag", "A", "B", "C", "correct", "fact"],
+      jsonFilename: "umob-vragen.json",
+      csvFilename: "umob-vragen.csv"
+    },
+    en: {
+      subtitle: "Generate viral quiz questions for content",
+      langToggle: "🇳🇱 NL",
+      random: "🎲 Random",
+      history: "History",
+      settings: "Settings",
+      historyTitle: "History",
+      allTypes: "All types",
+      allLevels: "All levels",
+      diffMakkelijk: "Easy",
+      diffMiddel: "Medium",
+      diffMoeilijk: "Hard",
+      typeUmob: "Umob",
+      typeAdjacent: "Adjacent",
+      exportJson: "⬇️ JSON",
+      exportCsv: "⬇️ CSV",
+      exportCopy: "📋 Copy all",
+      settingsTitle: "Settings",
+      settingsInfo: "Questions come from a fixed, local question bank (~202 questions) — no API or internet connection needed.",
+      resetPool: "🔄 Reset pool (all questions available again)",
+      resetPoolDone: "✅ Pool reset",
+      clearHistory: "Clear history",
+      clearHistoryConfirm: "Are you sure you want to clear the entire history? This cannot be undone.",
+      loading: "Picking a question...",
+      correctPrefix: "✅ Correct answer: ",
+      copy: "📋 Copy",
+      copied: "✅ Copied",
+      again: "🔁 Another one",
+      historyEmptyFiltered: "No questions generated yet (or nothing matches your filters).",
+      historyEmpty: "No questions generated yet.",
+      questionLabel: "Question: ",
+      answerLabel: "Answer: ",
+      factLabel: "Fun fact: ",
+      noQuestionsToCopy: "No questions to copy.",
+      csvHeader: ["category", "type", "difficulty", "question", "A", "B", "C", "correct", "fact"],
+      jsonFilename: "umob-questions.json",
+      csvFilename: "umob-questions.csv"
+    }
+  };
+  function t(key) {
+    return STRINGS[getLang()][key];
+  }
+  function diffLabel(d) {
+    return t("diff" + d.charAt(0).toUpperCase() + d.slice(1));
+  }
+  function typeLabel(ty) {
+    return ty === "umob" ? t("typeUmob") : t("typeAdjacent");
+  }
+
   /* ==================== CATEGORIES ==================== */
   const CATEGORIES = [
-    { id: "steden", emoji: "🌍", label: "Steden" },
-    { id: "vervoer", emoji: "🛴", label: "Vervoer" },
-    { id: "slim", emoji: "🧠", label: "Slimme reiziger" },
-    { id: "app", emoji: "📱", label: "De App" },
-    { id: "kosten", emoji: "💶", label: "Wat kost het?" }
+    { id: "steden", emoji: "🌍", label: { nl: "Steden", en: "Cities" } },
+    { id: "vervoer", emoji: "🛴", label: { nl: "Vervoer", en: "Transport" } },
+    { id: "slim", emoji: "🧠", label: { nl: "Slimme reiziger", en: "Smart traveler" } },
+    { id: "app", emoji: "📱", label: { nl: "De App", en: "The App" } },
+    { id: "kosten", emoji: "💶", label: { nl: "Wat kost het?", en: "What's it cost?" } },
+    { id: "topografie", emoji: "📍", label: { nl: "Topografie", en: "Topography" } }
   ];
+  function catLabel(cat) {
+    return cat.label[getLang()];
+  }
 
   /* ==================== VASTE VRAGENBANK ====================
      192 handmatig samengestelde vragen in eenvoudig, duidelijk Nederlands
      (B2-niveau), verdeeld over 5 categorieën, telkens gemengd Umob-specifiek
      en Adjacent, verdeeld over makkelijk/middel/moeilijk. Geen API of
      internetverbinding nodig — alles draait lokaal in de browser. */
-  const QUESTION_BANK = {
+  const QUESTION_BANK_NL = {
     steden: [
       { question: "Je gaat een weekend weg naar een stad die je niet kent. Wat is het grootste risico als je ter plekke vervoer moet regelen?", options: { A: "Je moet meerdere onbekende apps downloaden en registreren", B: "Je hebt meteen overzicht van alle opties", C: "Er is geen enkel risico" }, correct: "A", fact: "Dat 'zoveel apps, zo weinig tijd'-probleem is precies waarom apps zoals Umob bestaan — één account werkt overal.", type: "umob", difficulty: "middel" },
       { question: "Je verhuist naar een andere stad in het buitenland. Wat is het slimste wat je meteen kan doen qua vervoer?", options: { A: "Tien nieuwe lokale apps downloaden", B: "Je bestaande mobiliteitsapp gewoon meenemen", C: "Wachten tot je een auto koopt" }, correct: "B", fact: "Een app die in meerdere landen werkt, scheelt je die hele zoektocht.", type: "umob", difficulty: "middel" },
@@ -888,8 +1014,258 @@
       { question: "Waarom is 'de goedkoopste optie' op papier niet altijd de goedkoopste optie in de praktijk?", options: { A: "Prijs verandert nooit", B: "Vertraging of omwegen kunnen het alsnog duurder maken", C: "Het is altijd exact hetzelfde" }, correct: "B", fact: "Een 'goedkope' optie die uitloopt, kan je alsnog geld kosten door gemiste tijd.", type: "adjacent", difficulty: "moeilijk" },
       { question: "Wat is het meest verrassende gevolg van vaste, terugkerende vervoerskosten zoals een OV-abonnement?", options: { A: "Je gaat uiteindelijk minder nadenken over elke losse rit", B: "Je betaalt juist per rit meer", C: "Er verandert helemaal niks aan je gedrag" }, correct: "A", fact: "Met een vast abonnement reken je niet meer per rit, wat vaak juist geld bespaart.", type: "adjacent", difficulty: "moeilijk" },
       { question: "Wat is de grootste denkfout die mensen maken bij het vergelijken van vervoerskosten?", options: { A: "Ze vergelijken alleen de prijs per rit, niet de kosten over een heel jaar", B: "Ze vergelijken juist te veel", C: "Prijzen zijn toch altijd exact gelijk" }, correct: "A", fact: "Over een jaar bekeken verschuift het plaatje vaak flink ten opzichte van één losse rit.", type: "adjacent", difficulty: "moeilijk" }
+    ],
+    topografie: [
+      { question: "Welk land ligt direct ten noorden van Duitsland, als enige landgrens in die richting?", options: { A: "Denemarken", B: "Polen", C: "Nederland" }, correct: "A", fact: "Denemarken is Duitslands enige buurland in het noorden, via het schiereiland Jutland.", type: "adjacent", difficulty: "middel" },
+      { question: "Welk land ligt direct ten oosten van Duitsland?", options: { A: "Polen", B: "Tsjechië", C: "Oostenrijk" }, correct: "A", fact: "Polen grenst over de volle lengte aan Duitslands oostgrens.", type: "adjacent", difficulty: "middel" },
+      { question: "Welk klein land ligt precies tussen Frankrijk en Spanje in, hoog in de Pyreneeën?", options: { A: "Andorra", B: "Monaco", C: "Liechtenstein" }, correct: "A", fact: "Andorra ligt op zo'n 2.000 meter hoogte, ingeklemd tussen zijn twee grote buren.", type: "adjacent", difficulty: "middel" },
+      { question: "Welke twee landen sluiten Liechtenstein volledig in?", options: { A: "Zwitserland en Oostenrijk", B: "Duitsland en Frankrijk", C: "Italië en Zwitserland" }, correct: "A", fact: "Liechtenstein is een van de weinige landen ter wereld met twee buurlanden en verder niemand.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Welk land ligt, op Vaticaanstad na, volledig binnen de grenzen van Italië?", options: { A: "San Marino", B: "Monaco", C: "Malta" }, correct: "A", fact: "San Marino is een van de oudste nog bestaande republieken ter wereld, compleet omsloten door Italië.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Wat is de hoofdstad van Zwitserland?", options: { A: "Zürich", B: "Genève", C: "Bern" }, correct: "C", fact: "Zürich is de grootste stad, maar Bern is de officiële hoofdstad.", type: "adjacent", difficulty: "middel" },
+      { question: "Wat is de hoofdstad van Australië?", options: { A: "Sydney", B: "Melbourne", C: "Canberra" }, correct: "C", fact: "Canberra werd speciaal als hoofdstad gebouwd, precies tussen rivalen Sydney en Melbourne in.", type: "adjacent", difficulty: "middel" },
+      { question: "Wat is de hoofdstad van Canada?", options: { A: "Toronto", B: "Ottawa", C: "Vancouver" }, correct: "B", fact: "Toronto is groter en bekender, maar Ottawa is de hoofdstad.", type: "adjacent", difficulty: "middel" },
+      { question: "Wat is de hoofdstad van de Verenigde Staten?", options: { A: "New York", B: "Washington D.C.", C: "Los Angeles" }, correct: "B", fact: "New York is de grootste stad, maar nooit de hoofdstad geweest.", type: "adjacent", difficulty: "middel" },
+      { question: "Wat is de hoofdstad van Nieuw-Zeeland?", options: { A: "Auckland", B: "Christchurch", C: "Wellington" }, correct: "C", fact: "Auckland is de grootste stad van Nieuw-Zeeland, maar Wellington is de hoofdstad.", type: "adjacent", difficulty: "middel" },
+      { question: "Aan hoeveel landen grenst Nederland over land?", options: { A: "1", B: "2", C: "3" }, correct: "B", fact: "Alleen België en Duitsland — Nederland heeft verder geen landgrenzen.", type: "adjacent", difficulty: "middel" },
+      { question: "Welk land heeft, van alle EU-lidstaten, de meeste buurlanden (negen in totaal)?", options: { A: "Frankrijk", B: "Duitsland", C: "Oostenrijk" }, correct: "B", fact: "Duitsland grenst aan Denemarken, Polen, Tsjechië, Oostenrijk, Zwitserland, Frankrijk, Luxemburg, België en Nederland.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Welk Deens gebied ligt geografisch gezien niet in Europa, maar in Noord-Amerika?", options: { A: "Groenland", B: "IJsland", C: "De Faeröer" }, correct: "A", fact: "Groenland hoort bij het Koninkrijk Denemarken, maar ligt duizenden kilometers van het Europese vasteland.", type: "adjacent", difficulty: "middel" },
+      { question: "IJsland ligt precies op de grens van welke twee tektonische platen?", options: { A: "De Noord-Amerikaanse en de Euraziatische plaat", B: "De Afrikaanse en de Euraziatische plaat", C: "De Pacifische en de Noord-Amerikaanse plaat" }, correct: "A", fact: "Je kunt in IJsland letterlijk tussen twee continentale platen door lopen.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "De Russische exclave Kaliningrad ligt ingeklemd tussen welke twee landen?", options: { A: "Polen en Litouwen", B: "Estland en Letland", C: "Finland en Zweden" }, correct: "A", fact: "Kaliningrad heeft geen landverbinding met de rest van Rusland en ligt volledig tussen EU-landen in.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Frankrijk deelt, via het overzeese gebied Frans-Guyana, een landgrens met welke Zuid-Amerikaanse landen?", options: { A: "Alleen Brazilië", B: "Alleen Suriname", C: "Zowel Brazilië als Suriname" }, correct: "C", fact: "Frankrijk grenst dankzij Frans-Guyana aan twee Zuid-Amerikaanse landen tegelijk.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Spanje heeft, via twee kleine exclaves, een landgrens op het Afrikaanse continent met welk land?", options: { A: "Marokko", B: "Algerije", C: "Tunesië" }, correct: "A", fact: "Ceuta en Melilla zijn Spaanse steden op Afrikaanse bodem, grenzend aan Marokko.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Het Verenigd Koninkrijk heeft een landgrens met slechts één ander land. Welk?", options: { A: "Frankrijk", B: "Ierland", C: "Nederland" }, correct: "B", fact: "Via Noord-Ierland is dit de enige landgrens van het Verenigd Koninkrijk.", type: "adjacent", difficulty: "middel" },
+      { question: "Aan hoeveel landen grenst Zwitserland?", options: { A: "3", B: "5", C: "7" }, correct: "B", fact: "Duitsland, Frankrijk, Italië, Oostenrijk en Liechtenstein — samen vijf buurlanden.", type: "adjacent", difficulty: "middel" },
+      { question: "Waar ligt het meest westelijke punt van het vasteland van Europa?", options: { A: "Ierland", B: "Portugal", C: "Spanje" }, correct: "B", fact: "Cabo da Roca in Portugal geldt als het meest westelijke punt van het Europese vasteland.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Canada heeft een landgrens met slechts één ander land. Welk?", options: { A: "De Verenigde Staten", B: "Groenland (Denemarken)", C: "Rusland" }, correct: "A", fact: "Op zee ligt Canada dicht bij Groenland en Rusland, maar over land grenst het alleen aan de VS.", type: "adjacent", difficulty: "middel" },
+      { question: "Welke Amerikaanse staat heeft als enige geen enkele landgrens, met geen ander land én geen andere staat?", options: { A: "Alaska", B: "Hawaii", C: "Florida" }, correct: "B", fact: "Alaska grenst tenminste nog aan Canada — Hawaii is volledig omgeven door oceaan.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Alaska ligt losgesneden van de rest van de Verenigde Staten. Met welk land deelt het wél een landgrens?", options: { A: "Rusland", B: "Canada", C: "Groenland" }, correct: "B", fact: "Tussen Alaska en de rest van de VS ligt Canada in de weg.", type: "adjacent", difficulty: "middel" },
+      { question: "Nieuw-Zeeland deelt geen landgrens met Australië. Hoeveel kilometer zee ligt er ongeveer tussen, via de Tasmanzee?", options: { A: "200 km", B: "2.000 km", C: "8.000 km" }, correct: "B", fact: "De Tasmanzee tussen beide landen is ongeveer 2.000 kilometer breed.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Op de grens van welke twee landen ligt de Mont Blanc, de hoogste berg van de Alpen?", options: { A: "Frankrijk en Italië", B: "Zwitserland en Italië", C: "Frankrijk en Zwitserland" }, correct: "A", fact: "De top van de Mont Blanc ligt precies op de Frans-Italiaanse grens.", type: "adjacent", difficulty: "middel" },
+      { question: "In welk land ontspringt de Rijn, de rivier die later door Duitsland en Nederland stroomt?", options: { A: "Duitsland", B: "Zwitserland", C: "Oostenrijk" }, correct: "B", fact: "De Rijn ontspringt hoog in de Zwitserse Alpen, in het kanton Graubünden.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Welke bergketen vormt van oudsher de natuurlijke grens tussen Frankrijk en Spanje?", options: { A: "De Alpen", B: "De Pyreneeën", C: "De Vogezen" }, correct: "B", fact: "De Pyreneeën lopen bijna helemaal van kust tot kust tussen beide landen.", type: "adjacent", difficulty: "middel" },
+      { question: "Portugal heeft, van alle landen ter wereld, precies één buurland. Welk?", options: { A: "Spanje", B: "Frankrijk", C: "Marokko" }, correct: "A", fact: "Portugal wordt aan alle landkanten omsloten door Spanje, verder alleen de Atlantische Oceaan.", type: "adjacent", difficulty: "middel" },
+      { question: "Welke twee microstaten liggen allebei volledig binnen de grenzen van Italië?", options: { A: "San Marino en Vaticaanstad", B: "Monaco en Andorra", C: "Liechtenstein en Luxemburg" }, correct: "A", fact: "Beide staten zijn compleet omsloten door Italiaans grondgebied, zonder toegang tot zee via een ander land.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Welk land ligt direct ten zuiden van Noorwegen en Zweden samen, als grens over land én water?", options: { A: "Denemarken", B: "Finland", C: "Duitsland" }, correct: "A", fact: "Denemarken ligt zuidelijker dan Noorwegen en Zweden, met de Skagerrak en Kattegat ertussen.", type: "adjacent", difficulty: "moeilijk" }
     ]
   };
+
+  const QUESTION_BANK_EN = {
+    steden: [
+      { question: "You're going away for a weekend to a city you don't know. What's the biggest risk if you have to sort out transport once you're there?", options: { A: "You have to download and sign up for several unfamiliar apps", B: "You instantly have an overview of every option", C: "There's no risk at all" }, correct: "A", fact: "That 'so many apps, so little time' problem is exactly why apps like Umob exist — one account works everywhere.", type: "umob", difficulty: "middel" },
+      { question: "You're moving to another city abroad. What's the smartest thing you can do for transport right away?", options: { A: "Download ten new local apps", B: "Just bring your existing mobility app with you", C: "Wait until you buy a car" }, correct: "B", fact: "An app that works across countries saves you that whole search.", type: "umob", difficulty: "middel" },
+      { question: "What's more annoying than a delayed train, when you've just arrived in a new city?", options: { A: "Not knowing which of five local apps you need this time", B: "A short walk to the platform", C: "A slightly pricier ride" }, correct: "A", fact: "Having everything in one app is exactly what prevents this kind of frustration.", type: "umob", difficulty: "middel" },
+      { question: "Two friends are traveling to different cities the same weekend. What's most convenient for both?", options: { A: "Each download a different local app", B: "Use the same mobility app, which works everywhere", C: "Just walk everywhere" }, correct: "B", fact: "One app that works everywhere beats ten separate local options.", type: "umob", difficulty: "middel" },
+      { question: "You need to travel to 3 different countries this month. What's the biggest time-waster without a combined app?", options: { A: "Registering and filling in your details again every time", B: "Nothing, everything just works", C: "You actually save time" }, correct: "A", fact: "Repeated sign-ups cost time — one account for every country skips that.", type: "umob", difficulty: "moeilijk" },
+      { question: "What stops people most often from booking a spontaneous city trip?", options: { A: "Uncertainty about getting around easily without your own car", B: "Too many flight options", C: "There's no barrier at all" }, correct: "A", fact: "That uncertainty disappears with an app that works the same everywhere.", type: "umob", difficulty: "moeilijk" },
+      { question: "You're on a business trip and your hotel is just too far from the metro station to walk. What's the smartest combo?", options: { A: "An expensive taxi the whole way", B: "Metro plus a short shared-ride hop", C: "Two hours of walking" }, correct: "B", fact: "Combining transport works best when it's all bookable in one place.", type: "umob", difficulty: "middel" },
+      { question: "What's the biggest advantage of a mobility app working in 20+ countries instead of just one?", options: { A: "You never have to start from scratch again when you travel", B: "You automatically get a discount", C: "There's no advantage" }, correct: "A", fact: "Being able to travel everywhere with the same app saves you figuring it out every single time.", type: "umob", difficulty: "middel" },
+      { question: "Why does 'quickly sorting out transport' in an unfamiliar city often feel more stressful than it should?", options: { A: "You don't know the local options and apps", B: "There's simply never any transport available", C: "Transport is always more expensive there" }, correct: "A", fact: "Unfamiliarity with local apps is the biggest hurdle — an app that works the same everywhere removes it.", type: "umob", difficulty: "moeilijk" },
+      { question: "Your team plays an away game in another city. What's most convenient for everyone's transport once there?", options: { A: "Everyone figures out a different local app on their own", B: "Everyone uses the same app, which works everywhere", C: "Everyone rents their own car" }, correct: "B", fact: "Using the same app stops everyone from having to separately figure out what's available locally.", type: "umob", difficulty: "middel" },
+      { question: "What's the biggest risk when a city gets loads of different shared-mobility providers, with no overview?", options: { A: "Riders no longer know which provider is good for what", B: "There's too much choice, so no problem", C: "Riders automatically travel cheaper" }, correct: "A", fact: "More providers without an overview gets confusing — one combined app makes it manageable again.", type: "umob", difficulty: "moeilijk" },
+      { question: "You're visiting a city where you don't speak the language. What makes sorting out transport there extra tricky?", options: { A: "Apps and instructions are often only in the local language", B: "There's no transport available anywhere", C: "Everything is free there" }, correct: "A", fact: "Sticking to one app you already trust, wherever you are, sidesteps that language barrier.", type: "umob", difficulty: "middel" },
+      { question: "What structurally changes about your travel convenience when a mobility app expands to more cities?", options: { A: "More chance it works wherever you happen to be", B: "Nothing, it stays the same", C: "It actually becomes less convenient" }, correct: "A", fact: "More coverage means less chance you'll still need a separate app.", type: "umob", difficulty: "moeilijk" },
+      { question: "Why is it smarter to check before a city trip whether your regular mobility app works there, instead of improvising on the spot?", options: { A: "You save time and stress on arrival", B: "It makes no difference", C: "Improvising is always faster" }, correct: "A", fact: "Knowing in advance that your app works there saves hassle on arrival.", type: "umob", difficulty: "middel" },
+      { question: "What's the biggest advantage of traveling between cities that both belong to the same mobility network?", options: { A: "You use the same login and overview everywhere", B: "You still have to sort everything out again anyway", C: "Nothing changes about your convenience" }, correct: "A", fact: "One network across multiple cities means consistent convenience, wherever you are.", type: "umob", difficulty: "moeilijk" },
+      { question: "What's the least sensible advice for someone who often travels between cities?", options: { A: "Use one mobility app that works everywhere", B: "Download a separate app for every city", C: "Check in advance what local options exist" }, correct: "B", fact: "Ten separate apps is exactly the problem combined apps solve.", type: "umob", difficulty: "middel" },
+      { question: "Why does the UK drive on the left side of the road?", options: { A: "Because of an old Roman law", B: "Riders used to keep their sword hand free, so they rode on the left", C: "Pure chance, there's no reason" }, correct: "B", fact: "Right-handed riders kept to the left so they could draw their sword if needed.", type: "adjacent", difficulty: "middel" },
+      { question: "Why did a Japanese rail company once have to publicly apologize?", options: { A: "A train left 20 seconds early", B: "A train was an hour late", C: "A train took the wrong route" }, correct: "A", fact: "Twenty seconds early was enough to trigger an official apology.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Where in the world is the shortest scheduled flight route, under 2 minutes long?", options: { A: "Between two islands in Scotland", B: "Between two cities in the Netherlands", C: "Between two Japanese islands" }, correct: "A", fact: "The flight between Westray and Papa Westray sometimes takes under 90 seconds.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Which city banned all rental e-scooters in 2023 after a referendum?", options: { A: "Berlin", B: "Paris", C: "Madrid" }, correct: "B", fact: "Parisians themselves voted to ban rental scooters in the city.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Which South American city closes around 120 km of streets to cars every Sunday, just for cyclists and walkers?", options: { A: "Bogotá", B: "Lima", C: "Santiago" }, correct: "A", fact: "Bogotá's Ciclovía is one of the largest recurring street events in the world.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "What percentage of the time does an average private car just sit idle, unused?", options: { A: "About 50%", B: "About 75%", C: "About 95%" }, correct: "C", fact: "A car spends the vast majority of its existence simply parked.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "What does the city of Amsterdam fish out of its canals in huge quantities every year?", options: { A: "Bikes", B: "Scooters", C: "Shopping carts" }, correct: "A", fact: "Thousands of bikes end up in the water every year and get fished back out.", type: "adjacent", difficulty: "middel" },
+      { question: "Which country has a fully driverless metro that's also the longest in the world?", options: { A: "Singapore", B: "United Arab Emirates (Dubai)", C: "South Korea" }, correct: "B", fact: "Dubai's metro is the longest fully automated metro network in the world.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Why did you once have to buy a separate piece of paper before you were even allowed to own a car in Singapore?", options: { A: "To reserve a parking spot", B: "To get permission to buy a car at all", C: "To get a discount on road tax" }, correct: "B", fact: "That 'Certificate of Entitlement' alone can cost tens of thousands of euros.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Which London underground line has stations that were built but never opened to passengers?", options: { A: "The Underground, with so-called 'ghost stations'", B: "None — every station has always been in use", C: "Only the newest line" }, correct: "A", fact: "Some stations were built and later closed, or never opened at all.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Why did Tokyo's trains used to have staff who literally pushed passengers onto the train?", options: { A: "To pack trains full during rush hour", B: "As a joke for tourists", C: "To count how many people boarded" }, correct: "A", fact: "These 'oshiya' made sure the doors could close during packed rush hours.", type: "adjacent", difficulty: "middel" },
+      { question: "Which Brazilian city is credited with inventing the modern concept of high-speed bus lanes?", options: { A: "Rio de Janeiro", B: "Curitiba", C: "São Paulo" }, correct: "B", fact: "Curitiba came up with this system back in the 1970s.", type: "adjacent", difficulty: "middel" },
+      { question: "Where did the world's first-ever high-speed train run, in time for the 1964 Olympics?", options: { A: "France", B: "Germany", C: "Japan" }, correct: "C", fact: "Japan's Shinkansen started running around the Tokyo Games of 1964.", type: "adjacent", difficulty: "middel" },
+      { question: "Los Angeles once had one of the world's biggest tram networks. What happened to it?", options: { A: "It still exists unchanged", B: "It was largely torn down in favor of the car", C: "It was converted into a metro" }, correct: "B", fact: "The famous Pacific Electric network largely disappeared in the last century.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "What's notable about trains in Switzerland?", options: { A: "A delay of a few minutes is already big news", B: "They never run on Sundays", C: "They're always free" }, correct: "A", fact: "Swiss trains are known for extreme punctuality.", type: "adjacent", difficulty: "middel" },
+      { question: "Roughly how old is the Via Appia, one of the oldest 'highways' in the world?", options: { A: "Just over 300 years", B: "Just over 800 years", C: "Just over 2,000 years" }, correct: "C", fact: "Parts of this Roman road are still walkable, after more than two millennia.", type: "adjacent", difficulty: "moeilijk" }
+    ],
+    vervoer: [
+      { question: "You have to choose between scooter, bike, train and taxi for the same trip. What's the smartest first step?", options: { A: "Check all four separately in four apps", B: "See everything side by side in one screen", C: "Flip a coin" }, correct: "B", fact: "Seeing every option at once is exactly why combined apps exist.", type: "umob", difficulty: "middel" },
+      { question: "What costs you the most time when picking the best transport for a trip, without an overview?", options: { A: "Comparing prices and times separately per app", B: "Instantly seeing the best option", C: "No time gets lost" }, correct: "A", fact: "Manually switching between apps is exactly the time loss an overview prevents.", type: "umob", difficulty: "middel" },
+      { question: "You've got heavy groceries and a short ride home. What's the smartest way to quickly find something suitable?", options: { A: "Check five different taxi and scooter apps separately for availability", B: "Instantly see which taxi or scooter is nearby, in one app", C: "Just walk with all the bags" }, correct: "B", fact: "One overview of available options saves you shopping around between apps.", type: "umob", difficulty: "middel" },
+      { question: "What's more annoying than a scooter that just left?", options: { A: "Having to switch to a completely different app to find an alternative", B: "Waiting two minutes", C: "A slightly longer ride" }, correct: "A", fact: "Instantly seeing an alternative in the same app avoids that hassle.", type: "umob", difficulty: "middel" },
+      { question: "Why do people sometimes pick the pricier option, even though a cheaper one would've been just as fast?", options: { A: "They don't check every option, out of convenience or lack of time", B: "The cheaper option simply doesn't exist", C: "Price never varies between options" }, correct: "A", fact: "Not checking everything costs you money — seeing it all side by side prevents that.", type: "umob", difficulty: "moeilijk" },
+      { question: "What's the biggest advantage of being able to compare scooter, bike, train, taxi and public transport all at once?", options: { A: "You instantly see what's smartest for your situation", B: "You still have to book everything separately", C: "There's no advantage" }, correct: "A", fact: "Seeing it all together makes picking the right option a lot easier.", type: "umob", difficulty: "middel" },
+      { question: "Why is it annoying when every operator has its own separate app?", options: { A: "You keep having to switch to compare", B: "It actually makes comparing easier", C: "There's no downside" }, correct: "A", fact: "Switching between separate apps is exactly the problem an overview solves.", type: "umob", difficulty: "middel" },
+      { question: "What's the smartest thing to do when you're not sure whether a scooter, bike or taxi suits your trip best?", options: { A: "Just pick randomly", B: "See all the options side by side before you book", C: "Always take the priciest one, to be safe" }, correct: "B", fact: "Comparing before you book is exactly what overview apps are for.", type: "umob", difficulty: "moeilijk" },
+      { question: "What's the biggest downside of staying loyal to one fixed operator out of habit?", options: { A: "You might miss a faster or cheaper alternative", B: "You always save money", C: "There's no downside" }, correct: "A", fact: "Habit can end up costing you more than a quick comparison would.", type: "umob", difficulty: "middel" },
+      { question: "You need to quickly choose between two transport options with a small price difference. What helps you decide fastest?", options: { A: "Seeing both side by side instantly, including time", B: "Switching separately between two apps", C: "Making a random choice" }, correct: "A", fact: "Seeing them side by side instantly saves you switching between apps.", type: "umob", difficulty: "moeilijk" },
+      { question: "What's the biggest advantage of being able to book every type of transport in one place?", options: { A: "You don't just compare, you also book instantly without switching to another app", B: "You still have to switch to book", C: "Nothing changes" }, correct: "A", fact: "Comparing and booking in one place saves you an extra step.", type: "umob", difficulty: "middel" },
+      { question: "Why is it inconvenient to have to create a separate account for every provider?", options: { A: "You keep having to fill in your details again", B: "It happens automatically", C: "There's no downside" }, correct: "A", fact: "One account for every operator saves you that hassle.", type: "umob", difficulty: "middel" },
+      { question: "What's the biggest risk of always picking the first transport option you see, without comparing?", options: { A: "You might miss a faster or cheaper alternative right next to it", B: "You're always the fastest", C: "There's no risk" }, correct: "A", fact: "The first thing you see isn't automatically the best choice.", type: "umob", difficulty: "moeilijk" },
+      { question: "What makes choosing transport extra tricky when you're in a hurry?", options: { A: "You don't have time to check five apps", B: "There's actually more choice then", C: "Being in a hurry makes no difference" }, correct: "A", fact: "When you're rushed, seeing everything in one overview matters even more.", type: "umob", difficulty: "middel" },
+      { question: "What's the underlying problem that makes 'pick the best transport for your trip' so tricky?", options: { A: "Every provider sits in a different app, with different info", B: "There's too little transport available", C: "Transport is never comparable" }, correct: "A", fact: "Info scattered across separate apps is the problem — one overview is the fix.", type: "umob", difficulty: "moeilijk" },
+      { question: "What's the smartest way to never accidentally book the priciest option again?", options: { A: "Always book blind", B: "Compare price and time by default, in one overview", C: "Always wait for someone else to tip you off" }, correct: "B", fact: "Comparing by default before booking prevents pricey surprises.", type: "umob", difficulty: "middel" },
+      { question: "Why is the UK known for driving on the left?", options: { A: "Old habits from sword-carrying riders", B: "Because the first cars there had left-hand steering", C: "Due to a law from the 1950s" }, correct: "A", fact: "The habit goes back to right-handed riders on horseback.", type: "adjacent", difficulty: "middel" },
+      { question: "Where does the name 'Vespa' come from?", options: { A: "The Italian word for 'wasp'", B: "The inventor's surname", C: "An abbreviation of a long Italian name" }, correct: "A", fact: "The shape and sound reminded people of a wasp.", type: "adjacent", difficulty: "middel" },
+      { question: "Where and when was the world's first speeding ticket issued?", options: { A: "In the United Kingdom, 1896", B: "In Germany, 1920", C: "In the United States, 1950" }, correct: "A", fact: "The 'offender' was doing about 8 mph at the time.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "What ended up being the Segway's biggest legacy?", options: { A: "Massive hype beforehand, followed by disappointing sales", B: "A ban in almost every country", C: "Instant worldwide success" }, correct: "A", fact: "Expectations were sky-high, sales figures rather less so.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Why did the world's very first traffic light explode, in London in 1868?", options: { A: "A gas leak", B: "A lightning strike", C: "A driver's mistake" }, correct: "A", fact: "The light ran on gas — that went wrong within a month.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "What's notable about Paris's Vélib' bike-share system, launched in 2007?", options: { A: "It was one of the first big modern city bike schemes", B: "It was the most expensive system in the world", C: "It was shut down again within a year" }, correct: "A", fact: "Vélib' inspired countless bike-share systems worldwide.", type: "adjacent", difficulty: "middel" },
+      { question: "In which American city was the first major e-scooter service launched, in 2017?", options: { A: "Santa Monica", B: "Chicago", C: "Miami" }, correct: "A", fact: "Santa Monica was the starting point of the worldwide scooter craze.", type: "adjacent", difficulty: "middel" },
+      { question: "What's most striking about the idea of 'MaaS' (combining all your transport into one service)?", options: { A: "It's only existed since last year", B: "It saves you effort by handling everything in one place", C: "It only works for cars" }, correct: "B", fact: "MaaS is all about convenience: arranging everything without switching between separate providers.", type: "adjacent", difficulty: "middel" },
+      { question: "What happened to New York's tram and metro network compared to Los Angeles' tram network?", options: { A: "New York kept its metro, LA largely tore down its tram network", B: "Both cities kept everything intact", C: "Both cities tore everything down" }, correct: "A", fact: "LA's famous 'Red Cars' largely disappeared, while New York's subway survived.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Why are New York taxis specifically painted yellow?", options: { A: "Research showed yellow is the most visible from a distance", B: "Yellow just happened to be the cheapest paint", C: "It was the first owner's brand color" }, correct: "A", fact: "Visibility from far away was the deciding factor.", type: "adjacent", difficulty: "middel" },
+      { question: "What's distinctive about a 'tuk-tuk'?", options: { A: "It's a motorized rickshaw, best known from Southeast Asia", B: "It always runs on rails", C: "It's a European invention" }, correct: "A", fact: "Tuk-tuks are hugely popular in countries like Thailand.", type: "adjacent", difficulty: "middel" },
+      { question: "What's the trickiest part of a long journey to solve smoothly, also known as the 'last mile'?", options: { A: "The middle stretch by train", B: "The very last stretch, like from station to home", C: "There's no tricky part" }, correct: "B", fact: "That last stretch is often solved with a scooter or bike.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "What exactly is a 'super app' in the world of transport?", options: { A: "An app that only sends messages", B: "An app that combines multiple services, like transport and payments", C: "An app that only works in emergencies" }, correct: "B", fact: "Super apps bundle multiple services into one place.", type: "adjacent", difficulty: "middel" },
+      { question: "What's the name for the transport you often see in Southeast Asia that weaves through traffic faster than a car?", options: { A: "The rickshaw", B: "The motorbike taxi", C: "The bike taxi" }, correct: "B", fact: "Motorbike taxis are hugely popular for dodging traffic jams.", type: "adjacent", difficulty: "middel" },
+      { question: "What's the most unexpected effect e-bikes have had on commuting?", options: { A: "People suddenly cycle much greater distances than before", B: "People actually cycle less", C: "Nothing changes at all" }, correct: "A", fact: "Pedal assist suddenly makes longer cycling distances doable.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Why is an e-scooter usually quicker to grab in most cities than a shared car?", options: { A: "Scooters are scattered all over the city, cars are often at fixed spots", B: "Scooters are legally required to be everywhere", C: "Cars aren't allowed to be shared" }, correct: "A", fact: "Scooters tend to be right near you, cars more often sit at specific locations.", type: "adjacent", difficulty: "moeilijk" }
+    ],
+    slim: [
+      { question: "An 8 km trip, no rush hour, no hurry. What's financially smartest then?", options: { A: "Book the first option blind", B: "Quickly check public transport and bike side by side", C: "Always take a taxi" }, correct: "B", fact: "A quick comparison in one overview costs you seconds and saves you euros.", type: "umob", difficulty: "middel" },
+      { question: "You've got 10 minutes for an appointment, 1.5 km away. What's the smartest choice?", options: { A: "Find a car and park it", B: "Walk", C: "Instantly see which scooter or e-bike is closest" }, correct: "C", fact: "Seeing what's closest right now beats wandering around looking yourself.", type: "umob", difficulty: "middel" },
+      { question: "What's the real risk of blindly booking the first option without comparing?", options: { A: "You pay more than needed or arrive slower", B: "You always arrive faster", C: "You automatically get a discount" }, correct: "A", fact: "Booking blind without an overview costs you money more often than you'd think.", type: "umob", difficulty: "middel" },
+      { question: "A 15 km trip with luggage. What's usually the smartest combo?", options: { A: "Walk", B: "First check which option has room for luggage and is affordable", C: "Scooter with a bag on your back" }, correct: "B", fact: "With luggage, comparing options on space matters just as much as on price.", type: "umob", difficulty: "middel" },
+      { question: "When does it really pay off to compare right before you leave?", options: { A: "Never, prices are always the same", B: "When it's busy, since price and availability shift then", C: "Only on weekends" }, correct: "B", fact: "Price and availability can shift — that's why an up-to-date overview is valuable.", type: "umob", difficulty: "moeilijk" },
+      { question: "You're traveling 3 km with a friend. What's the smart thing to check, instead of traveling separately?", options: { A: "Whether one overview shows an option for 2 people at once", B: "Nothing, always travel separately", C: "Who can walk fastest" }, correct: "A", fact: "Traveling together gets easier when you can see every option at once.", type: "umob", difficulty: "middel" },
+      { question: "What costs you the most time if you never compare before booking?", options: { A: "The booking itself", B: "Finding out afterward it could've been cheaper", C: "Comparing itself costs more time" }, correct: "B", fact: "Regretting it afterward ends up costing more than a quick check beforehand.", type: "umob", difficulty: "moeilijk" },
+      { question: "You're stuck in rush hour and urgently need to be somewhere. What do you check first?", options: { A: "Which option is fastest available right now, in one overview", B: "Which option is cheapest, regardless of time", C: "Just grab the first option" }, correct: "A", fact: "When you're rushed, speed usually matters most — and one overview shows that fastest.", type: "umob", difficulty: "middel" },
+      { question: "What's a good reason to deliberately choose a pricier option when a cheaper one is available?", options: { A: "Time pressure or bad weather", B: "To impress strangers", C: "There's never a good reason" }, correct: "A", fact: "Sometimes the pricier option is the smart one — but you only see that once you compare everything.", type: "umob", difficulty: "middel" },
+      { question: "What's smartest for a trip you make every day, like commuting to work?", options: { A: "Do an extensive comparison every single day", B: "Never compare, just stick with the same habit", C: "Occasionally do a quick check of your options" }, correct: "C", fact: "Prices and availability change, so checking now and then pays off even for routine trips.", type: "umob", difficulty: "moeilijk" },
+      { question: "Why isn't 'the fastest option' always the smartest choice?", options: { A: "Speed is never important", B: "A slightly slower option can be much cheaper", C: "Fast is always the priciest" }, correct: "B", fact: "A few extra minutes can save you a lot on price — if you can see it.", type: "umob", difficulty: "moeilijk" },
+      { question: "Two trips cost exactly the same, but one is 10 minutes faster. What's usually the smartest choice?", options: { A: "Always take the slower one", B: "The faster one, if time matters to you", C: "Flip a coin" }, correct: "B", fact: "At equal price, time usually wins — but only if you compare.", type: "umob", difficulty: "middel" },
+      { question: "When is the smartest moment to consider an expensive taxi, despite the price?", options: { A: "When you're genuinely late and nothing else arrives on time", B: "Every day, as standard", C: "Only when it's dry and sunny" }, correct: "A", fact: "A taxi is pricey, but sometimes the only option that gets you there on time.", type: "umob", difficulty: "middel" },
+      { question: "What's the pitfall of always going with 'the first option you see'?", options: { A: "You might miss a cheaper or faster option right beside it", B: "It's always the best choice", C: "There's no pitfall" }, correct: "A", fact: "The first option isn't automatically the best one — comparing pays off.", type: "umob", difficulty: "middel" },
+      { question: "Why can it be smart to switch transport type mid-trip?", options: { A: "If things change along the way, you can instantly see an alternative", B: "To impress people", C: "It's basically never allowed" }, correct: "A", fact: "Staying flexible en route works best when you can instantly see alternatives.", type: "umob", difficulty: "moeilijk" },
+      { question: "What's ultimately the core of 'traveling smart'?", options: { A: "Always the cheapest option, no matter what", B: "A balance of price, time, convenience and situation, in one overview", C: "Always the fastest option, whatever it costs" }, correct: "B", fact: "Smart travel is about seeing the right balance, not sticking to one fixed rule.", type: "umob", difficulty: "moeilijk" },
+      { question: "What does an overview mainly help you with, in a way you'd easily miss yourself?", options: { A: "Only the color of the scooter", B: "Seeing price and travel time for multiple options at once", C: "The car's brand" }, correct: "B", fact: "Seeing price and travel time side by side is exactly what makes smart choices easy.", type: "umob", difficulty: "middel" },
+      { question: "How many separate apps do you save by arranging all your transport in one place instead of per provider?", options: { A: "None", B: "Dozens", C: "Exactly two" }, correct: "B", fact: "Instead of dozens of separate apps: everything in one place.", type: "umob", difficulty: "middel" },
+      { question: "What underlying problem do you solve by seeing everything in one overview, beyond just 'cheaper travel'?", options: { A: "Too many separate apps and providers side by side", B: "Too few cars on the road", C: "Public transport being too cheap" }, correct: "A", fact: "Making transport easy to overview is the underlying problem being solved.", type: "umob", difficulty: "moeilijk" },
+      { question: "Why is it smarter to show price and travel time together, instead of separately?", options: { A: "You spot the smartest choice at a glance, without switching back and forth", B: "It's legally required", C: "To show ads" }, correct: "A", fact: "Seeing price and time together makes comparing possible in seconds.", type: "umob", difficulty: "middel" },
+      { question: "What's the fastest way to find out whether walking, cycling or the train suits you best right now?", options: { A: "Just guess", B: "View price and travel time for every option at once", C: "Always take the train" }, correct: "B", fact: "Seeing every option at once prevents a wrong guess.", type: "umob", difficulty: "moeilijk" },
+      { question: "What's the biggest advantage of being able to compare before you choose, instead of regretting it afterward?", options: { A: "You consistently make better choices, without thinking longer about it", B: "Comparing always costs more time than it saves", C: "There's no advantage" }, correct: "A", fact: "Comparing beforehand is both faster and smarter than discovering afterward it could've gone differently.", type: "umob", difficulty: "middel" },
+      { question: "What's the distinction between 'cheap travel' and 'smart travel'?", options: { A: "Smart travel also factors in time and convenience, not just the lowest price", B: "There's no difference", C: "Smart travel is always pricier" }, correct: "A", fact: "Smart travel is a broader trade-off than just looking at price.", type: "umob", difficulty: "moeilijk" },
+      { question: "Up to what distance is cycling in the city usually faster than the car, even though the car can drive faster?", options: { A: "Under 2 km", B: "Under 5 km", C: "Under 10 km" }, correct: "B", fact: "Up to about 5 km, cycling in the city is often faster, thanks to traffic and parking.", type: "adjacent", difficulty: "middel" },
+      { question: "What often costs you more time than the ride itself, in a busy city center?", options: { A: "Getting in", B: "Finding a parking spot", C: "Paying" }, correct: "B", fact: "Finding a parking spot can take longer than the ride itself.", type: "adjacent", difficulty: "middel" },
+      { question: "What's usually the cheapest way to cover 20 km outside rush hour, even if the car feels faster?", options: { A: "Taxi", B: "Train or public transport", C: "Only a shared car" }, correct: "B", fact: "Over longer distances, public transport is often the cheapest per kilometer.", type: "adjacent", difficulty: "middel" },
+      { question: "What usually saves you the most money per year in the city, even if it feels less free?", options: { A: "Owning a car", B: "Bike, public transport and occasional shared rides", C: "A taxi every day" }, correct: "B", fact: "Owning a car quickly costs thousands of euros a year, even parked.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Why does car traffic often grind to a halt in rush hour, while cyclists just keep moving?", options: { A: "Cars take up more space per person", B: "Cyclists are legally allowed to cut in line", C: "Cars are technically slower" }, correct: "A", fact: "More space per person means things jam up faster when it's busy.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "What's usually the costliest mistake travelers make repeatedly, without realizing it?", options: { A: "Leaving too early", B: "Never comparing, always picking the same option", C: "Walking too much" }, correct: "B", fact: "Those who never compare often pay more than needed, without noticing.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "In rain, for a short distance, why is a covered option often smarter, despite the higher price?", options: { A: "Staying dry is worth it, even if it costs a bit more", B: "Rain makes no difference", C: "Covered is always cheaper" }, correct: "A", fact: "In bad weather, comfort sometimes outweighs saving a few euros.", type: "adjacent", difficulty: "middel" },
+      { question: "Why isn't 'the cheapest option' automatically 'the smartest choice'?", options: { A: "Because price never varies", B: "Because time and convenience matter too", C: "Because it's always the same anyway" }, correct: "B", fact: "Smart travel is a balance between price, time and convenience.", type: "adjacent", difficulty: "middel" },
+      { question: "What's surprisingly often faster than ordering a shared car, for a trip under 1 km?", options: { A: "Just walking", B: "Calling a taxi", C: "Waiting for a bus" }, correct: "A", fact: "For very short distances, walking is often just as fast as arranging transport.", type: "adjacent", difficulty: "middel" },
+      { question: "What's the simple rule of thumb for whether cycling beats the car in the city?", options: { A: "Under 5 km, cycling is often faster", B: "Over 20 km, cycling is always faster", C: "There is no rule of thumb" }, correct: "A", fact: "Up to about 5 km, the bike often beats the car in the city.", type: "adjacent", difficulty: "middel" },
+      { question: "Why can booking early sometimes save you money, even though the trip itself is identical?", options: { A: "Price and availability can get worse as things get busier", B: "It never makes a difference", C: "Booking early is always pricier" }, correct: "A", fact: "When it's busy, price and availability can deteriorate.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "What's usually smartest for 30 km outside rush hour, with no hurry, even though the car seems the default?", options: { A: "Train or public transport", B: "Only taxi", C: "Only walking" }, correct: "A", fact: "Over long distances with no hurry, public transport is often both cheap and relaxed.", type: "adjacent", difficulty: "middel" },
+      { question: "Why can it be smarter to split a trip, like bike plus train, instead of one mode the whole way?", options: { A: "It's never smart", B: "It can be both faster and cheaper", C: "It's always pricier" }, correct: "B", fact: "Combining transport is often smarter than blindly sticking to one option.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "What's the quiet reason people structurally overpay for transport, without realizing it?", options: { A: "They never compare and choose out of habit", B: "Transport is always equally priced everywhere", C: "Prices never change" }, correct: "A", fact: "Habit is one of the biggest reasons people overpay.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "What matters most in a truly smart travel choice, even if it's not the lowest price?", options: { A: "Only the price", B: "A balance of price, time, convenience and situation", C: "Always the fastest option, whatever it costs" }, correct: "B", fact: "Smart travel is about finding the right balance, not sticking to one rule.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "What's usually smartest when you're not sure which option is fastest?", options: { A: "Just guess", B: "Check price and travel time beforehand", C: "Always take the car" }, correct: "B", fact: "Checking beforehand prevents a wrong guess.", type: "adjacent", difficulty: "middel" },
+      { question: "Which city is often forgotten as the starting point of the worldwide e-scooter craze?", options: { A: "Los Angeles", B: "Santa Monica", C: "Berlin" }, correct: "B", fact: "Santa Monica, 2017 — the real starting point of the scooter craze.", type: "adjacent", difficulty: "middel" },
+      { question: "What's a lesser-known but true fact about cycling in the Netherlands as a whole?", options: { A: "Nationally, there are more bikes than people", B: "There are more cars than bikes", C: "Bike lanes are rare there" }, correct: "A", fact: "The Netherlands as a whole has more bikes than people on average.", type: "adjacent", difficulty: "middel" },
+      { question: "What's the least obvious thing about Venice, transport-wise?", options: { A: "Literally no cars drive there at all", B: "It has Italy's busiest motorway", C: "It has a major airport right in the city center" }, correct: "A", fact: "In Venice you only get around on foot or by water.", type: "adjacent", difficulty: "middel" },
+      { question: "Why does the word 'taxi' actually come from a device, not a profession or a city?", options: { A: "It comes from 'taximeter,' the device that measures the fare", B: "It comes from a French driver's surname", C: "It comes from 'tax-free'" }, correct: "A", fact: "'Taxi' is simply short for taximeter.", type: "adjacent", difficulty: "middel" },
+      { question: "What went wrong with the world's very first traffic light, in London in 1868?", options: { A: "It exploded from a gas leak", B: "Nobody understood the colors", C: "It worked perfectly, to this day" }, correct: "A", fact: "That traffic light broke down within a month due to a gas leak.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Where and when exactly was the Vespa scooter invented?", options: { A: "1946, Italy", B: "1962, France", C: "1978, Spain" }, correct: "A", fact: "After World War II, the Vespa quickly became popular across Europe.", type: "adjacent", difficulty: "middel" },
+      { question: "Why did you once have to pay separately, before you were even allowed to buy a car in Singapore, on top of the car's price?", options: { A: "To reserve a parking spot", B: "For a mandatory permit, separate from the purchase price", C: "To get an extra driving license" }, correct: "B", fact: "That permit alone can cost tens of thousands of euros, before the car itself.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "When exactly did the London Underground, the world's oldest metro, open?", options: { A: "1863", B: "1901", C: "1922" }, correct: "A", fact: "The London Underground is older than the car itself.", type: "adjacent", difficulty: "moeilijk" }
+    ],
+    app: [
+      { question: "What's the biggest advantage of having all your transport in one app, instead of spread across ten?", options: { A: "Less time wasted switching between apps", B: "Seeing more ads", C: "Remembering more passwords" }, correct: "A", fact: "Less switching between apps means less time lost.", type: "umob", difficulty: "middel" },
+      { question: "You switch providers while planning a trip. What would be most convenient?", options: { A: "Having to open a whole new app", B: "Just staying in the same app", C: "Your account gets blocked" }, correct: "B", fact: "Switching between providers should be possible within the same app, without changing over.", type: "umob", difficulty: "middel" },
+      { question: "What's more annoying than a ride running two minutes late?", options: { A: "Having to create a new account for every provider", B: "A short walk to the stop", C: "A slightly pricier ride" }, correct: "A", fact: "Registering over and over is exactly the hassle one central app solves.", type: "umob", difficulty: "middel" },
+      { question: "What's the most underrated benefit of only having to enter your payment details once?", options: { A: "You save time on every future ride, regardless of provider", B: "It makes no difference", C: "It's mandatory" }, correct: "A", fact: "Enter it once, use it everywhere after — that saves plenty of hassle in the long run.", type: "umob", difficulty: "middel" },
+      { question: "What's the biggest risk of ten separate transport apps side by side, that people often underestimate?", options: { A: "You lose track and end up picking the pricier option", B: "Your phone runs out of storage", C: "There's no real risk" }, correct: "A", fact: "Without a clear overview, you tend to pick the pricier option without even noticing.", type: "umob", difficulty: "moeilijk" },
+      { question: "What would be most convenient if you switch providers mid-trip?", options: { A: "Having to log in and pay all over again", B: "Just continuing with the same login and payment", C: "Getting a separate invoice per provider" }, correct: "B", fact: "One login and one payment, no matter how often you switch — that's the ideal.", type: "umob", difficulty: "middel" },
+      { question: "What's the root problem that makes it so hard to keep track of your transport options?", options: { A: "Every provider has its own app, login and history", B: "There isn't enough transport available", C: "Transport never changes" }, correct: "A", fact: "Scattered apps are the problem — one central place is the fix.", type: "umob", difficulty: "moeilijk" },
+      { question: "Why would an app that works with multiple providers get more valuable as more providers join?", options: { A: "More choice and better comparison for the user", B: "More ads per provider", C: "It doesn't actually make a difference" }, correct: "A", fact: "The more providers connected, the more complete the comparison becomes.", type: "umob", difficulty: "moeilijk" },
+      { question: "What would be the biggest convenience of finding your entire ride history in one place, regardless of provider?", options: { A: "You never have to dig through ten different apps again", B: "It's mandatory to keep it", C: "It makes no difference" }, correct: "A", fact: "One overview of all your rides saves you from hunting through separate apps.", type: "umob", difficulty: "middel" },
+      { question: "What's the core reason people switch from separate apps to one combined app?", options: { A: "Overview, comparison and convenience in one place", B: "To collect as many apps as possible", C: "To only be able to book taxis" }, correct: "A", fact: "Overview, comparison and convenience — that's exactly why people make the switch.", type: "umob", difficulty: "moeilijk" },
+      { question: "What makes comparing faster: everything in one screen, or opening ten apps side by side?", options: { A: "Everything in one screen", B: "Ten separate apps, that's actually faster", C: "It makes no difference" }, correct: "A", fact: "One screen with all the options saves you the manual switching.", type: "umob", difficulty: "middel" },
+      { question: "Why would it be handy if your account just worked everywhere, without re-registering per country?", options: { A: "You don't have to start from scratch every time you travel", B: "Every country should really be an exception", C: "You have to log in fresh every time anyway" }, correct: "A", fact: "One system worldwide means no separate registrations per country.", type: "umob", difficulty: "moeilijk" },
+      { question: "What's the most underrated benefit of having everything in one app instead of spread across ten?", options: { A: "Less time lost switching between apps, without even realizing it", B: "More ads to look at", C: "More passwords to remember" }, correct: "A", fact: "Less switching between apps means less time lost, structurally.", type: "umob", difficulty: "moeilijk" },
+      { question: "Why do more and more people check the price in an app beforehand, instead of finding out afterward?", options: { A: "To avoid surprises when paying", B: "Because it's mandatory", C: "Out of pure boredom" }, correct: "A", fact: "Checking beforehand prevents nasty surprises when you settle up.", type: "umob", difficulty: "middel" },
+      { question: "What's the underlying goal of price and time comparison in one central app?", options: { A: "To show ads", B: "To help you make the best choice for your situation", C: "Just to collect data" }, correct: "B", fact: "Comparing exists to help you make the best choice, per situation.", type: "umob", difficulty: "moeilijk" },
+      { question: "What does NOT change for you when a whole new provider gets added to an app like this?", options: { A: "You don't need to create a new account", B: "You automatically get a discount on every ride", C: "You have to download a new app" }, correct: "A", fact: "New providers just get added to your existing account.", type: "umob", difficulty: "middel" },
+      { question: "What's the biggest benefit of one mobility app that people usually only realize after too many separate apps?", options: { A: "Fewer accounts needed", B: "Always a discount", C: "Faster internet" }, correct: "A", fact: "One app means one account instead of dozens of separate logins.", type: "adjacent", difficulty: "middel" },
+      { question: "What's the real reason people prefer one travel app over ten separate ones?", options: { A: "Overview and convenience", B: "It's legally required", C: "It's always cheaper" }, correct: "A", fact: "Overview and convenience are the main reasons people bundle their apps.", type: "adjacent", difficulty: "middel" },
+      { question: "What's the term for combining all your transport into one service, instead of separate per provider?", options: { A: "MaaS (Mobility as a Service)", B: "IoT", C: "SaaS" }, correct: "A", fact: "MaaS stands for Mobility as a Service — all transport in one place.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "What's a commonly mentioned but often underestimated downside of ten separate transport apps?", options: { A: "Too few features per app", B: "Logging in and entering payment details over and over", C: "Too much discount" }, correct: "B", fact: "With separate apps you have to log in and enter your details every single time — wasted time.", type: "adjacent", difficulty: "middel" },
+      { question: "Why is the popularity of mobility 'super-apps' growing worldwide faster than you'd expect?", options: { A: "People want fewer apps to manage", B: "It's mandatory everywhere", C: "They're always free" }, correct: "A", fact: "Managing fewer apps and handling everything centrally appeals to more and more travelers.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "What's surprisingly often the biggest obstacle to switching to shared transport, bigger than price?", options: { A: "Lack of overview or trust in availability", B: "Too few color options", C: "It's too fast" }, correct: "A", fact: "Uncertainty about availability and overview holds people back more often than price does.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "What exactly does 'first-mile/last-mile' mean, and why is it so hard to solve?", options: { A: "The first and last stretch of a trip, often without decent transport", B: "The longest distance of a journey", C: "A kind of public transport discount" }, correct: "A", fact: "First-mile/last-mile is often the trickiest stretch of a trip to solve efficiently.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "What's the real, underlying goal of price and time comparison in any travel app?", options: { A: "To show ads", B: "To help you make the best choice for your situation", C: "To collect data" }, correct: "B", fact: "Comparing exists to help you make the best choice, per situation.", type: "adjacent", difficulty: "middel" },
+      { question: "What's the most underrated convenience of having everything in one app compared to ten separate ones?", options: { A: "Less time lost switching around", B: "Seeing more ads", C: "Remembering more passwords" }, correct: "A", fact: "Less switching between apps means less time lost, without you even noticing.", type: "adjacent", difficulty: "middel" },
+      { question: "Why do people nowadays check the price beforehand more and more, instead of trusting their gut?", options: { A: "To avoid surprises afterward", B: "Because it's mandatory", C: "Out of boredom" }, correct: "A", fact: "Checking beforehand prevents nasty surprises when you settle up.", type: "adjacent", difficulty: "middel" },
+      { question: "What's the biggest, often underestimated benefit of real-time info in a travel app?", options: { A: "You see what's available right now, not ten minutes ago", B: "You never have to travel again", C: "It's always free" }, correct: "A", fact: "Real-time info shows what's available now, not yesterday.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "What's the hidden downside of an app that only works with exactly one provider?", options: { A: "You can never compare it against alternatives", B: "It's always faster", C: "There's no downside at all" }, correct: "A", fact: "Without a way to compare, you never know if you're getting the best deal.", type: "adjacent", difficulty: "middel" },
+      { question: "What exactly does it mean when an app is 'provider-independent'?", options: { A: "It works with multiple providers side by side, with no preference", B: "It works with exactly one provider", C: "It doesn't work at all" }, correct: "A", fact: "Provider-independent means the app isn't tied to just one company.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Why did apps that combine everything suddenly get so much more popular in recent years?", options: { A: "Separate apps for every provider felt like a hassle", B: "Governments recently made it mandatory", C: "They all suddenly became free" }, correct: "A", fact: "The explosion of separate apps was reason enough for many people to switch.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Besides money, what does a good mobility app mostly save you, without you immediately noticing it?", options: { A: "Time and mental effort of comparing", B: "Nothing, only money really counts", C: "Only data usage" }, correct: "A", fact: "Besides money, you mainly save time and hassle by not comparing ten apps yourself.", type: "adjacent", difficulty: "middel" }
+    ],
+    kosten: [
+      { question: "What's the biggest advantage of an app that shows you the price upfront, instead of only after your ride?", options: { A: "You can choose wisely, no surprises", B: "It's legally required", C: "To show ads" }, correct: "A", fact: "Seeing the price upfront puts you back in control of your choice.", type: "umob", difficulty: "middel" },
+      { question: "Why can the exact same trip cost a different price depending on when you book it?", options: { A: "Price depends on demand and availability", B: "An app just changes prices randomly", C: "Prices are always exactly the same" }, correct: "A", fact: "Price and availability can shift, for example during rush hour.", type: "umob", difficulty: "middel" },
+      { question: "What do you actually save the most by comparing prices upfront, more than most people realize?", options: { A: "Only time", B: "Money and time at once", C: "Only data" }, correct: "B", fact: "Comparing saves you both money and time at the same time.", type: "umob", difficulty: "middel" },
+      { question: "What's the real, structural risk if you never compare prices before booking?", options: { A: "You structurally pay a bit more, without noticing", B: "You automatically travel faster", C: "You automatically get a discount" }, correct: "A", fact: "Never comparing can cost you serious money over time, without you even realizing it.", type: "umob", difficulty: "moeilijk" },
+      { question: "What changes for your costs when an app adds a completely new provider to compare?", options: { A: "Existing trips suddenly get more expensive", B: "You just get an extra option to compare", C: "You have to pay more for your account" }, correct: "B", fact: "More providers just means more choice, not more cost.", type: "umob", difficulty: "middel" },
+      { question: "What's the real key to actually saving money on transport, more than people usually think?", options: { A: "By always showing the most expensive option first", B: "By putting price and time of all providers side by side", C: "By showing ads" }, correct: "B", fact: "Seeing everything side by side is the basis of smart saving.", type: "umob", difficulty: "moeilijk" },
+      { question: "How many times should you actually have to enter your payment details, even if you use ten different providers?", options: { A: "Separately for every single provider", B: "Ideally just once, for your whole account", C: "Every week again" }, correct: "B", fact: "Entering it once should be enough to cover every provider.", type: "umob", difficulty: "middel" },
+      { question: "What helps you most to structurally avoid overpaying, without having to think about it every time?", options: { A: "Booking blind", B: "Seeing price and travel time together by default", C: "Always picking the first option" }, correct: "B", fact: "Seeing price and travel time together structurally gives you the best choice.", type: "umob", difficulty: "moeilijk" },
+      { question: "Why should you never have to pay separately per provider, even if you switch rides five times in one trip?", options: { A: "Because everything should be free", B: "Because payment is ideally handled centrally", C: "Because you always pay in cash anyway" }, correct: "B", fact: "Running all payments through one place avoids that hassle, no matter the provider.", type: "umob", difficulty: "moeilijk" },
+      { question: "What's the most underrated reason people structurally overpay for transport?", options: { A: "They never compare and just pick out of habit, without an overview", B: "Transport costs exactly the same everywhere", C: "Prices never change" }, correct: "A", fact: "Habit without an overview is one of the biggest reasons people overpay.", type: "umob", difficulty: "middel" },
+      { question: "What's the most underrated cost of owning a car, besides fuel or charging?", options: { A: "Replacing windshield wipers", B: "Insurance, maintenance and depreciation combined", C: "The car radio" }, correct: "B", fact: "Insurance, maintenance and depreciation together often cost more per year than you'd think.", type: "adjacent", difficulty: "middel" },
+      { question: "Why can a shared car work out cheaper for some people than owning one, even though renting seems pricier?", options: { A: "You only pay when you actually use it", B: "Shared cars are always brand new", C: "Shared cars never need insurance" }, correct: "A", fact: "With a shared car you pay per use, instead of always carrying fixed costs.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "What's usually the cheapest way to cover long distances, even if the car feels faster?", options: { A: "Taxi the whole way", B: "Train or public transport", C: "A shared car for the whole trip" }, correct: "B", fact: "Over long distances, the train is often by far the cheapest option.", type: "adjacent", difficulty: "middel" },
+      { question: "What often costs public transport riders money unnecessarily, without them noticing right away?", options: { A: "Forgetting to check out", B: "Arriving on time", C: "Having a valid ticket" }, correct: "A", fact: "Forgetting to check out can cost you quite a bit extra.", type: "adjacent", difficulty: "middel" },
+      { question: "Why is a parking spot downtown often so much pricier than one on the edge of the city?", options: { A: "Little space and high demand push up the price", B: "The asphalt is a different color", C: "Downtown parking is basically always free" }, correct: "A", fact: "Little space and high demand make parking in city centers a lot more expensive.", type: "adjacent", difficulty: "middel" },
+      { question: "What's the most underrated hidden cost of owning a car in the long run?", options: { A: "Fuel or charging", B: "The car just loses value, year after year", C: "Windshield wipers" }, correct: "B", fact: "A car often loses thousands of euros in value per year, even parked and unused.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Why can traveling outside rush hour save you surprisingly much money, even over the exact same distance?", options: { A: "Off-peak hours are cheaper than busy rush hour for a lot of transport", B: "It's always exactly the same", C: "You're not allowed to travel outside rush hour" }, correct: "A", fact: "Off-peak hours are cheaper than busy rush hour for a lot of transport.", type: "adjacent", difficulty: "middel" },
+      { question: "Why do people without their own car often save thousands of euros a year, more than they'd expect?", options: { A: "No more insurance, tax, maintenance or parking costs", B: "They just stop traveling altogether then", C: "Public transport is always completely free" }, correct: "A", fact: "All those fixed car costs together really add up over a year.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "What costs you more in the end: booking one expensive ride once, or never comparing for years?", options: { A: "One expensive ride once", B: "Never comparing for years", C: "Both exactly the same" }, correct: "B", fact: "In the long run, structurally never comparing costs you the most.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "What's the best way to structurally keep transport costs down, beyond just 'leaving the car at home'?", options: { A: "Always taking the car anyway", B: "Combining transport modes and comparing upfront", C: "Never planning ahead" }, correct: "B", fact: "Combining modes and comparing upfront saves the most structurally.", type: "adjacent", difficulty: "middel" },
+      { question: "What's usually the most expensive way to cover a short distance in the city, even though it feels comfortable?", options: { A: "Walking", B: "Taxi", C: "Cycling" }, correct: "B", fact: "A taxi is usually the most expensive option per kilometer in the city.", type: "adjacent", difficulty: "middel" },
+      { question: "What's usually cheaper if you use public transport a lot, even though single tickets seem more flexible?", options: { A: "Single tickets", B: "A subscription", C: "It really makes no difference" }, correct: "B", fact: "If you travel often, a subscription is usually cheaper than single tickets.", type: "adjacent", difficulty: "middel" },
+      { question: "What usually costs more over the same short distance: the car or the bike, even though the car feels quicker?", options: { A: "The car", B: "The bike", C: "Exactly the same" }, correct: "A", fact: "Cycling costs almost nothing, a car quickly adds up in fuel and parking.", type: "adjacent", difficulty: "middel" },
+      { question: "What's usually pricier if you make several trips in one day, even though paying per ride seems fairer?", options: { A: "Single tickets", B: "A day pass", C: "Exactly the same" }, correct: "A", fact: "With multiple trips in a day, a day pass is often the better deal.", type: "adjacent", difficulty: "middel" },
+      { question: "What's a simple way to structurally save on your commute, without giving up any time?", options: { A: "Combining cycling or public transport instead of always driving", B: "Buying a new car every day", C: "Always taking a taxi" }, correct: "A", fact: "Combining cycling or public transport can save hundreds of euros a year.", type: "adjacent", difficulty: "middel" },
+      { question: "What normally costs you literally nothing at all, unlike every other way of getting around?", options: { A: "A taxi ride", B: "Walking", C: "Renting a shared car" }, correct: "B", fact: "Walking is the only option that's always completely free.", type: "adjacent", difficulty: "middel" },
+      { question: "What's usually the smartest move if you genuinely don't know which option is cheapest?", options: { A: "Just guess and hope for the best", B: "Quickly check price and travel time together", C: "Always go for the priciest, just to be safe" }, correct: "B", fact: "A quick check stops you from overpaying for no reason.", type: "adjacent", difficulty: "middel" },
+      { question: "Why isn't 'the cheapest option' on paper always the cheapest option in real life?", options: { A: "Price never changes", B: "Delays or detours can still make it pricier", C: "It's always exactly the same" }, correct: "B", fact: "A 'cheap' option that runs late can still cost you money through lost time.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "What's the most surprising effect of fixed, recurring transport costs like a public transport subscription?", options: { A: "You end up thinking less about each individual trip", B: "You actually pay more per trip", C: "Nothing about your behavior changes at all" }, correct: "A", fact: "With a fixed subscription you stop calculating per ride, which often saves money.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "What's the biggest mistake people make when comparing transport costs?", options: { A: "They only compare the price per trip, not the cost over a whole year", B: "They compare way too much", C: "Prices are always exactly equal anyway" }, correct: "A", fact: "Looked at over a year, the picture often shifts a lot compared to just one trip.", type: "adjacent", difficulty: "moeilijk" }
+    ],
+    topografie: [
+      { question: "Which country sits directly north of Germany — its only land border in that direction?", options: { A: "Denmark", B: "Poland", C: "Netherlands" }, correct: "A", fact: "Denmark is Germany's only northern neighbor, connected via the Jutland peninsula.", type: "adjacent", difficulty: "middel" },
+      { question: "Which country lies directly east of Germany?", options: { A: "Poland", B: "Czechia", C: "Austria" }, correct: "A", fact: "Poland runs along the entire length of Germany's eastern border.", type: "adjacent", difficulty: "middel" },
+      { question: "Which tiny country sits right between France and Spain, high in the Pyrenees?", options: { A: "Andorra", B: "Monaco", C: "Liechtenstein" }, correct: "A", fact: "Andorra sits at about 2,000 meters altitude, wedged between its two big neighbors.", type: "adjacent", difficulty: "middel" },
+      { question: "Which two countries completely surround Liechtenstein?", options: { A: "Switzerland and Austria", B: "Germany and France", C: "Italy and Switzerland" }, correct: "A", fact: "Liechtenstein is one of the few countries in the world with exactly two neighbors and nobody else.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Aside from Vatican City, which country sits entirely within Italy's borders?", options: { A: "San Marino", B: "Monaco", C: "Malta" }, correct: "A", fact: "San Marino is one of the oldest surviving republics in the world, fully enclosed by Italy.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "What's the capital of Switzerland?", options: { A: "Zurich", B: "Geneva", C: "Bern" }, correct: "C", fact: "Zurich is the biggest city, but Bern is the official capital.", type: "adjacent", difficulty: "middel" },
+      { question: "What's the capital of Australia?", options: { A: "Sydney", B: "Melbourne", C: "Canberra" }, correct: "C", fact: "Canberra was built specifically to be the capital, sitting right between rivals Sydney and Melbourne.", type: "adjacent", difficulty: "middel" },
+      { question: "What's the capital of Canada?", options: { A: "Toronto", B: "Ottawa", C: "Vancouver" }, correct: "B", fact: "Toronto is bigger and better known, but Ottawa is the capital.", type: "adjacent", difficulty: "middel" },
+      { question: "What's the capital of the United States?", options: { A: "New York", B: "Washington D.C.", C: "Los Angeles" }, correct: "B", fact: "New York is the biggest city but has never been the capital.", type: "adjacent", difficulty: "middel" },
+      { question: "What's the capital of New Zealand?", options: { A: "Auckland", B: "Christchurch", C: "Wellington" }, correct: "C", fact: "Auckland is New Zealand's biggest city, but Wellington is the capital.", type: "adjacent", difficulty: "middel" },
+      { question: "How many countries does the Netherlands border by land?", options: { A: "1", B: "2", C: "3" }, correct: "B", fact: "Just Belgium and Germany — the Netherlands has no other land borders.", type: "adjacent", difficulty: "middel" },
+      { question: "Which EU country has the most neighbors of all — nine in total?", options: { A: "France", B: "Germany", C: "Austria" }, correct: "B", fact: "Germany borders Denmark, Poland, Czechia, Austria, Switzerland, France, Luxembourg, Belgium, and the Netherlands.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Which Danish territory is geographically not in Europe at all, but in North America?", options: { A: "Greenland", B: "Iceland", C: "The Faroe Islands" }, correct: "A", fact: "Greenland belongs to the Kingdom of Denmark, but sits thousands of kilometers from mainland Europe.", type: "adjacent", difficulty: "middel" },
+      { question: "Iceland sits right on the boundary of which two tectonic plates?", options: { A: "The North American and Eurasian plates", B: "The African and Eurasian plates", C: "The Pacific and North American plates" }, correct: "A", fact: "In Iceland you can literally walk between two continental plates.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "The Russian exclave of Kaliningrad is squeezed between which two countries?", options: { A: "Poland and Lithuania", B: "Estonia and Latvia", C: "Finland and Sweden" }, correct: "A", fact: "Kaliningrad has no land connection to the rest of Russia and sits entirely between EU countries.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Via its overseas territory French Guiana, France shares a land border with which South American countries?", options: { A: "Only Brazil", B: "Only Suriname", C: "Both Brazil and Suriname" }, correct: "C", fact: "Thanks to French Guiana, France borders two South American countries at once.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Through two small exclaves, Spain has a land border on the African continent with which country?", options: { A: "Morocco", B: "Algeria", C: "Tunisia" }, correct: "A", fact: "Ceuta and Melilla are Spanish cities on African soil, bordering Morocco.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "The United Kingdom has a land border with just one other country. Which one?", options: { A: "France", B: "Ireland", C: "Netherlands" }, correct: "B", fact: "Via Northern Ireland, this is the UK's only land border.", type: "adjacent", difficulty: "middel" },
+      { question: "How many countries does Switzerland border?", options: { A: "3", B: "5", C: "7" }, correct: "B", fact: "Germany, France, Italy, Austria, and Liechtenstein — five neighbors in total.", type: "adjacent", difficulty: "middel" },
+      { question: "Where's the westernmost point of mainland Europe?", options: { A: "Ireland", B: "Portugal", C: "Spain" }, correct: "B", fact: "Cabo da Roca in Portugal is considered the westernmost point of the European mainland.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Canada has a land border with just one other country. Which one?", options: { A: "The United States", B: "Greenland (Denmark)", C: "Russia" }, correct: "A", fact: "By sea Canada sits close to Greenland and Russia, but by land it only borders the US.", type: "adjacent", difficulty: "middel" },
+      { question: "Which US state is the only one with zero land borders — no country, no other state?", options: { A: "Alaska", B: "Hawaii", C: "Florida" }, correct: "B", fact: "Alaska at least borders Canada — Hawaii is completely surrounded by ocean.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Alaska is cut off from the rest of the US. Which country does it actually share a land border with?", options: { A: "Russia", B: "Canada", C: "Greenland" }, correct: "B", fact: "Canada sits right between Alaska and the rest of the US.", type: "adjacent", difficulty: "middel" },
+      { question: "New Zealand shares no land border with Australia. Roughly how many kilometers of sea separate them across the Tasman Sea?", options: { A: "200 km", B: "2,000 km", C: "8,000 km" }, correct: "B", fact: "The Tasman Sea between the two countries is roughly 2,000 kilometers wide.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Mont Blanc, the highest peak in the Alps, sits on the border of which two countries?", options: { A: "France and Italy", B: "Switzerland and Italy", C: "France and Switzerland" }, correct: "A", fact: "The summit of Mont Blanc sits right on the French-Italian border.", type: "adjacent", difficulty: "middel" },
+      { question: "In which country does the Rhine originate, before it flows through Germany and the Netherlands?", options: { A: "Germany", B: "Switzerland", C: "Austria" }, correct: "B", fact: "The Rhine rises high in the Swiss Alps, in the canton of Graubünden.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Which mountain range traditionally forms the natural border between France and Spain?", options: { A: "The Alps", B: "The Pyrenees", C: "The Vosges" }, correct: "B", fact: "The Pyrenees run almost coast to coast between the two countries.", type: "adjacent", difficulty: "middel" },
+      { question: "Of all the countries in the world, Portugal has exactly one neighbor. Which one?", options: { A: "Spain", B: "France", C: "Morocco" }, correct: "A", fact: "Portugal is bordered on every land side by Spain, and by the Atlantic Ocean everywhere else.", type: "adjacent", difficulty: "middel" },
+      { question: "Which two microstates both sit entirely within Italy's borders?", options: { A: "San Marino and Vatican City", B: "Monaco and Andorra", C: "Liechtenstein and Luxembourg" }, correct: "A", fact: "Both states are completely enclosed by Italian territory, with no sea access through any other country.", type: "adjacent", difficulty: "moeilijk" },
+      { question: "Which country lies directly south of Norway and Sweden combined, bordering both by land and water?", options: { A: "Denmark", B: "Finland", C: "Germany" }, correct: "A", fact: "Denmark sits further south than Norway and Sweden, separated by the Skagerrak and Kattegat straits.", type: "adjacent", difficulty: "moeilijk" }
+    ]
+  };
+
 
   /* ==================== STATE ==================== */
   let currentCategoryId = null;
@@ -949,7 +1325,7 @@
      uit die pool. Is die pool op, dan wordt de andere type-pool geprobeerd;
      is de hele categorie op, dan begint de cyclus opnieuw (reset). */
   function pickQuestion(categoryId) {
-    const all = QUESTION_BANK[categoryId] || [];
+    const all = getBank()[categoryId] || [];
     const used = getUsedPool()[categoryId] || [];
     const type = pickType();
 
@@ -1019,7 +1395,7 @@
         type: picked.type,
         difficulty: picked.difficulty,
         category: category.id,
-        categoryLabel: category.label,
+        categoryLabel: catLabel(category),
         categoryEmoji: category.emoji,
         createdAt: Date.now()
       };
@@ -1046,18 +1422,15 @@
     questionBody.innerHTML =
       '<div class="loading-box">' +
       '<div class="spinner" aria-hidden="true"></div>' +
-      '<p>Vraag wordt gekozen...</p>' +
+      '<p>' + escapeHTML(t("loading")) + '</p>' +
       '</div>';
   }
 
   function renderQuestion(q) {
-    const diffLabelMap = { makkelijk: "Makkelijk", middel: "Middel", moeilijk: "Moeilijk" };
-    const typeLabelMap = { umob: "Umob", adjacent: "Adjacent" };
-
     let html = '<div class="badges-row">';
     html += '<span class="badge badge-cat">' + q.categoryEmoji + ' ' + escapeHTML(q.categoryLabel) + '</span>';
-    html += '<span class="badge badge-type-' + q.type + '">' + typeLabelMap[q.type] + '</span>';
-    html += '<span class="badge badge-diff-' + q.difficulty + '">' + diffLabelMap[q.difficulty] + '</span>';
+    html += '<span class="badge badge-type-' + q.type + '">' + typeLabel(q.type) + '</span>';
+    html += '<span class="badge badge-diff-' + q.difficulty + '">' + diffLabel(q.difficulty) + '</span>';
     html += '</div>';
 
     html += '<p class="question-text">' + escapeHTML(q.question) + '</p>';
@@ -1073,13 +1446,13 @@
     html += '</div>';
 
     html += '<div class="answer-box open" id="answer-box">';
-    html += '<div class="correct-label">✅ Juist antwoord: ' + q.correct + ') ' + escapeHTML(q.options[q.correct]) + '</div>';
+    html += '<div class="correct-label">' + escapeHTML(t("correctPrefix")) + q.correct + ') ' + escapeHTML(q.options[q.correct]) + '</div>';
     html += '<div class="fact-text">💡 ' + escapeHTML(q.fact) + '</div>';
     html += '</div>';
 
     html += '<div class="modal-actions">';
-    html += '<button class="btn-copy" type="button" id="copy-btn">📋 Kopieer</button>';
-    html += '<button class="btn-again" type="button" id="again-btn">🔁 Nog één</button>';
+    html += '<button class="btn-copy" type="button" id="copy-btn">' + escapeHTML(t("copy")) + '</button>';
+    html += '<button class="btn-again" type="button" id="again-btn">' + escapeHTML(t("again")) + '</button>';
     html += '</div>';
 
     questionBody.innerHTML = html;
@@ -1101,16 +1474,14 @@
   }
 
   function copyQuestionToClipboard(q) {
-    const diffLabelMap = { makkelijk: "Makkelijk", middel: "Middel", moeilijk: "Moeilijk" };
-    const typeLabelMap = { umob: "Umob", adjacent: "Adjacent" };
     const text =
-      q.categoryEmoji + " " + q.categoryLabel + " (" + typeLabelMap[q.type] + ", " + diffLabelMap[q.difficulty] + ")\n\n" +
-      "Vraag: " + q.question + "\n" +
+      q.categoryEmoji + " " + q.categoryLabel + " (" + typeLabel(q.type) + ", " + diffLabel(q.difficulty) + ")\n\n" +
+      t("questionLabel") + q.question + "\n" +
       "A) " + q.options.A + "\n" +
       "B) " + q.options.B + "\n" +
       "C) " + q.options.C + "\n\n" +
-      "Antwoord: " + q.correct + ") " + q.options[q.correct] + "\n" +
-      "Weetje: " + q.fact;
+      t("answerLabel") + q.correct + ") " + q.options[q.correct] + "\n" +
+      t("factLabel") + q.fact;
 
     if (navigator.clipboard && navigator.clipboard.writeText) {
       navigator.clipboard.writeText(text).then(function () {
@@ -1139,7 +1510,7 @@
     const btn = document.getElementById("copy-btn");
     if (!btn) return;
     const original = btn.textContent;
-    btn.textContent = "✅ Gekopieerd";
+    btn.textContent = t("copied");
     setTimeout(function () { btn.textContent = original; }, 1500);
   }
 
@@ -1151,14 +1522,18 @@
 
   /* ==================== CATEGORY GRID ==================== */
   const grid = document.getElementById("category-grid");
-  CATEGORIES.forEach(function (cat) {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "cat-btn";
-    btn.innerHTML = '<span class="emoji">' + cat.emoji + '</span><span class="label">' + escapeHTML(cat.label) + '</span>';
-    btn.addEventListener("click", function () { generateQuestion(cat.id); });
-    grid.appendChild(btn);
-  });
+  function renderCategoryGrid() {
+    grid.innerHTML = "";
+    CATEGORIES.forEach(function (cat) {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "cat-btn";
+      btn.innerHTML = '<span class="emoji">' + cat.emoji + '</span><span class="label">' + escapeHTML(catLabel(cat)) + '</span>';
+      btn.addEventListener("click", function () { generateQuestion(cat.id); });
+      grid.appendChild(btn);
+    });
+  }
+  renderCategoryGrid();
 
   document.getElementById("random-btn").addEventListener("click", function () {
     const cat = pickRandomCategory();
@@ -1186,22 +1561,19 @@
   filterDifficulty.addEventListener("change", renderHistory);
 
   function getFilteredHistory() {
-    const t = filterType.value;
+    const typeFilter = filterType.value;
     const d = filterDifficulty.value;
     return getHistory().filter(function (q) {
-      if (t !== "all" && q.type !== t) return false;
+      if (typeFilter !== "all" && q.type !== typeFilter) return false;
       if (d !== "all" && q.difficulty !== d) return false;
       return true;
     });
   }
 
-  const diffLabelMap = { makkelijk: "Makkelijk", middel: "Middel", moeilijk: "Moeilijk" };
-  const typeLabelMap = { umob: "Umob", adjacent: "Adjacent" };
-
   function renderHistory() {
     const list = getFilteredHistory();
     if (list.length === 0) {
-      historyContent.innerHTML = '<div class="history-empty">Nog geen vragen gegenereerd (of niets matcht je filters).</div>';
+      historyContent.innerHTML = '<div class="history-empty">' + escapeHTML(t("historyEmptyFiltered")) + '</div>';
       return;
     }
 
@@ -1216,19 +1588,19 @@
       const items = grouped[cat.id];
       if (!items || items.length === 0) return;
       html += '<div class="history-group">';
-      html += '<h3>' + cat.emoji + ' ' + escapeHTML(cat.label) + ' (' + items.length + ')</h3>';
+      html += '<h3>' + cat.emoji + ' ' + escapeHTML(catLabel(cat)) + ' (' + items.length + ')</h3>';
       items.forEach(function (q) {
         html += '<details class="history-item">';
         html += '<summary><span>' + escapeHTML(truncate(q.question, 70)) + '</span>';
         html += '<span class="hi-badges">';
-        html += '<span class="hi-badge badge-type-' + q.type + '">' + typeLabelMap[q.type] + '</span>';
-        html += '<span class="hi-badge badge-diff-' + q.difficulty + '">' + diffLabelMap[q.difficulty] + '</span>';
+        html += '<span class="hi-badge badge-type-' + q.type + '">' + typeLabel(q.type) + '</span>';
+        html += '<span class="hi-badge badge-diff-' + q.difficulty + '">' + diffLabel(q.difficulty) + '</span>';
         html += '</span></summary>';
         html += '<div class="hi-detail">';
         html += 'A) ' + escapeHTML(q.options.A) + '<br>';
         html += 'B) ' + escapeHTML(q.options.B) + '<br>';
         html += 'C) ' + escapeHTML(q.options.C) + '<br>';
-        html += '<span class="hi-correct">Antwoord: ' + q.correct + ') ' + escapeHTML(q.options[q.correct]) + '</span><br>';
+        html += '<span class="hi-correct">' + escapeHTML(t("answerLabel")) + q.correct + ') ' + escapeHTML(q.options[q.correct]) + '</span><br>';
         html += '💡 ' + escapeHTML(q.fact);
         html += '</div>';
         html += '</details>';
@@ -1236,7 +1608,7 @@
       html += '</div>';
     });
 
-    historyContent.innerHTML = html || '<div class="history-empty">Nog geen vragen gegenereerd.</div>';
+    historyContent.innerHTML = html || '<div class="history-empty">' + escapeHTML(t("historyEmpty")) + '</div>';
   }
 
   function truncate(str, len) {
@@ -1264,13 +1636,12 @@
 
   document.getElementById("export-json").addEventListener("click", function () {
     const list = getFilteredHistory();
-    downloadBlob(JSON.stringify(list, null, 2), "umob-vragen.json", "application/json");
+    downloadBlob(JSON.stringify(list, null, 2), t("jsonFilename"), "application/json");
   });
 
   document.getElementById("export-csv").addEventListener("click", function () {
     const list = getFilteredHistory();
-    const header = ["categorie", "type", "moeilijkheid", "vraag", "A", "B", "C", "correct", "fact"];
-    const rows = [header.join(",")];
+    const rows = [t("csvHeader").join(",")];
     list.forEach(function (q) {
       rows.push([
         csvEscape(q.categoryLabel),
@@ -1284,23 +1655,23 @@
         csvEscape(q.fact)
       ].join(","));
     });
-    downloadBlob(rows.join("\n"), "umob-vragen.csv", "text/csv");
+    downloadBlob(rows.join("\n"), t("csvFilename"), "text/csv");
   });
 
   document.getElementById("export-copy").addEventListener("click", function () {
     const list = getFilteredHistory();
     const text = list.map(function (q) {
-      return q.categoryEmoji + " " + q.categoryLabel + " (" + typeLabelMap[q.type] + ", " + diffLabelMap[q.difficulty] + ")\n" +
-        "Vraag: " + q.question + "\n" +
+      return q.categoryEmoji + " " + q.categoryLabel + " (" + typeLabel(q.type) + ", " + diffLabel(q.difficulty) + ")\n" +
+        t("questionLabel") + q.question + "\n" +
         "A) " + q.options.A + "\nB) " + q.options.B + "\nC) " + q.options.C + "\n" +
-        "Antwoord: " + q.correct + ") " + q.options[q.correct] + "\n" +
-        "Weetje: " + q.fact;
+        t("answerLabel") + q.correct + ") " + q.options[q.correct] + "\n" +
+        t("factLabel") + q.fact;
     }).join("\n\n---\n\n");
 
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text || "Geen vragen om te kopiëren.");
+      navigator.clipboard.writeText(text || t("noQuestionsToCopy"));
     } else {
-      fallbackCopy(text || "Geen vragen om te kopiëren.");
+      fallbackCopy(text || t("noQuestionsToCopy"));
     }
   });
 
@@ -1321,16 +1692,47 @@
     saveUsedPool({});
     const btn = this;
     const original = btn.textContent;
-    btn.textContent = "✅ Pool gereset";
+    btn.textContent = t("resetPoolDone");
     setTimeout(function () { btn.textContent = original; }, 1500);
   });
 
   document.getElementById("settings-clear-all").addEventListener("click", function () {
-    if (confirm("Weet je zeker dat je de volledige geschiedenis wilt wissen? Dit kan niet ongedaan gemaakt worden.")) {
+    if (confirm(t("clearHistoryConfirm"))) {
       saveHistory([]);
       settingsOverlay.classList.remove("open");
     }
   });
+
+  /* ==================== LANGUAGE TOGGLE ==================== */
+  function applyLanguage() {
+    document.getElementById("lang-toggle").textContent = t("langToggle");
+    document.getElementById("header-subtitle").textContent = t("subtitle");
+    document.getElementById("random-btn").textContent = t("random");
+    document.getElementById("open-history").textContent = t("history");
+    document.getElementById("open-settings").textContent = t("settings");
+    document.getElementById("history-title").textContent = t("historyTitle");
+    document.getElementById("opt-all-types").textContent = t("allTypes");
+    document.getElementById("opt-all-levels").textContent = t("allLevels");
+    document.getElementById("opt-diff-makkelijk").textContent = t("diffMakkelijk");
+    document.getElementById("opt-diff-middel").textContent = t("diffMiddel");
+    document.getElementById("opt-diff-moeilijk").textContent = t("diffMoeilijk");
+    document.getElementById("export-json").textContent = t("exportJson");
+    document.getElementById("export-csv").textContent = t("exportCsv");
+    document.getElementById("export-copy").textContent = t("exportCopy");
+    document.getElementById("settings-title").textContent = t("settingsTitle");
+    document.getElementById("settings-info").textContent = t("settingsInfo");
+    document.getElementById("settings-reset-pool").textContent = t("resetPool");
+    document.getElementById("settings-clear-all").textContent = t("clearHistory");
+    renderCategoryGrid();
+    if (historyOverlay.classList.contains("open")) renderHistory();
+  }
+
+  document.getElementById("lang-toggle").addEventListener("click", function () {
+    setLang(getLang() === "en" ? "nl" : "en");
+    applyLanguage();
+  });
+
+  applyLanguage();
 
 })();
 </script>
